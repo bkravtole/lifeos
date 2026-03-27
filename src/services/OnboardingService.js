@@ -636,9 +636,24 @@ class OnboardingService {
 
   /**
    * Start onboarding for new user (get first question)
+   * @param {string} language - User's language preference (english/hindi/hinglish)
    */
-  static getFirstQuestion() {
-    return this.baseQuestions[0].question;
+  static getFirstQuestion(language = 'english') {
+    let questionSet = this.englishQuestions;
+    
+    if (language === 'hindi') {
+      questionSet = this.hindiQuestions;
+    } else if (language === 'hinglish') {
+      questionSet = this.hinglishQuestions;
+    }
+    
+    // Safety check: ensure base questions exist
+    if (!questionSet || !questionSet.base || !questionSet.base[0]) {
+      logger.warn(`No first question found for language: ${language}, defaulting to English`);
+      return this.englishQuestions.base[0].question;
+    }
+    
+    return questionSet.base[0].question;
   }
 
   /**
