@@ -8,7 +8,7 @@ import logger from '../utils/logger.js';
 export class AIEngine {
   constructor() {
     this.apiKey = process.env.GROQ_API_KEY;
-    this.model = 'mixtral-8x7b-32768';
+    this.model = 'llama-3.3-70b-versatile';
 
     if (!this.apiKey) {
       throw new Error('GROQ_API_KEY is not defined');
