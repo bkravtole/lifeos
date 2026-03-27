@@ -28,6 +28,13 @@ const userSchema = new mongoose.Schema(
       default: 'personal'
     },
 
+    // Language preference (detected from first message)
+    preferredLanguage: {
+      type: String,
+      enum: ['english', 'hindi', 'hinglish'],
+      default: 'english'
+    },
+
     // User Profile Info (Personal)
     dailyActivities: [String], // e.g., ["gym", "meditation", "work"]
     hobbies: [String], // e.g., ["reading", "coding", "sports"]

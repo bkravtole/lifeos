@@ -105,6 +105,9 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
       timestamp: rawMessage.timestamp
     });
 
+    // Detect language from first message
+    const userLanguage = aiEngine.detectLanguage(rawMessage.text || '');
+
     // Ensure user exists in DB
     let user = await User.findOne({ phone: rawMessage.from });
     let isNewUser = false;
@@ -113,11 +116,12 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
         phone: rawMessage.from,
         name: rawMessage.senderName || 'User',
         onboardingCompleted: false,
-        onboardingStep: 0
+        onboardingStep: 0,
+        preferredLanguage: userLanguage  // Set language from first message
       });
       await user.save();
       isNewUser = true;
-      logger.info('New user created:', { userId: user._id, phone: rawMessage.from });
+      logger.info('New user created:', { userId: user._id, phone: rawMessage.from, language: userLanguage });
     }
 
     // Update user metadata
@@ -130,17 +134,26 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
       logger.info('User is in onboarding:', { userId: user._id, step: user.onboardingStep });
       
       if (isNewUser) {
-        // First message - send warm welcome + first question
-        const welcomeMsg = '🎉 LifeOS में स्वागत है!\n\nमैं आपका personal AI assistant हूँ - और मैं आपको अपनी life को organize करने में मदद करूँगा। थोड़ा सा समय मुझे आपके बारे में बताएँ, फिर हम शुरू कर देंगे! 🚀\n\n(Welcome to LifeOS! I\'m your personal AI assistant - here to help organize your life. Tell me a bit about yourself, then we\'ll get started!)';
+        // First message - send warm welcome + first question based on user's language
+        let welcomeMsg = '';
+        if (user.preferredLanguage === 'hindi') {
+          welcomeMsg = '🎉 LifeOS में स्वागत है!\n\nमैं आपका personal AI assistant हूँ - और मैं आपको अपनी life को organize करने में मदद करूँगा। थोड़ा सा समय मुझे आपके बारे में बताएँ, फिर हम शुरू कर देंगे! 🚀';
+        } else if (user.preferredLanguage === 'hinglish') {
+          welcomeMsg = '🎉 LifeOS mein aapka swagat hai!\n\nMain aapka personal AI assistant hoon - aur main aapko apni life ko organize karne mein madad karunga. Thoda sa samay mujhe aapke bare mein batao, phir hum shuru kar denge! 🚀';
+        } else {
+          // English (default)
+          welcomeMsg = '🎉 Welcome to LifeOS!\n\nI\'m your personal AI assistant - and I\'m here to help you organize your life. Tell me a bit about yourself, and then we\'ll get started! 🚀';
+        }
+        
         await whatsappService.sendMessage(rawMessage.from, welcomeMsg);
         
-        // Small delay then send first question
+        // Small delay then send first question in user's language
         setTimeout(async () => {
-          const firstQuestion = OnboardingService.getFirstQuestion();
+          const firstQuestion = OnboardingService.getFirstQuestion(user.preferredLanguage);
           await whatsappService.sendMessage(rawMessage.from, firstQuestion);
         }, 500);
         
-        logger.info('Sent welcome message and first onboarding question:', { userId: user._id });
+        logger.info('Sent welcome message and first onboarding question:', { userId: user._id, language: user.preferredLanguage });
         return res.status(200).json({
           success: true,
           messageId: rawMessage.messageId,
