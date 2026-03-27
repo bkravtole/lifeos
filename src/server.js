@@ -1,42 +1,23 @@
-import express from 'express';
-import dotenv from 'dotenv';
+import app from './app.js';
 import { connectDB } from './utils/database.js';
-import { requestLogger, errorHandler } from './middleware/index.js';
-import webhookRoutes from './api/webhook.js';
-import apiRoutes from './api/index.js';
 import SchedulerService from './services/SchedulerService.js';
 import logger from './utils/logger.js';
 
-dotenv.config();
-
-const app = express();
 const PORT = process.env.PORT || 3000;
-
-// Middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(requestLogger);
-
-// Routes
-app.use('/api/webhook', webhookRoutes);
-app.use('/api', apiRoutes);
-
-// Error handling
-app.use(errorHandler);
-
-// Initialize scheduler
 const scheduler = new SchedulerService();
 
 /**
- * Start server
+ * Start server (Local development only)
  */
 const startServer = async () => {
   try {
     // Connect to database
     await connectDB();
+    logger.info('✅ Database connected');
 
     // Initialize scheduler
     await scheduler.initialize();
+    logger.info('✅ Scheduler initialized');
 
     // Start Express server
     app.listen(PORT, process.env.HOST || 'localhost', () => {
