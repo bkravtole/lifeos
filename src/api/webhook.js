@@ -414,11 +414,21 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
         aiResult.intent,
         aiResult.entities || {},
         contextWithProfile,
-        processedMessage.text  // Pass current user message for language detection
+        processedMessage.text,  // Pass current user message for language detection
+        routeResult  // Pass result of intent handling (success/failure, data)
       );
     } catch (error) {
       logger.warn('Response generation failed, using fallback:', error.message);
-      responseText = 'समझ नहीं आया 😅 फिर से बताओ';
+      
+      // Generate language-aware fallback response
+      const lang = aiEngine.detectLanguage(processedMessage.text);
+      if (lang === 'hindi') {
+        responseText = 'कुछ गलती हुई 😅 फिर से कोशिश करो।';
+      } else if (lang === 'hinglish') {
+        responseText = 'Kuch error ho gaya 😅. Phir se try karo na.';
+      } else {
+        responseText = 'Oops! Something went wrong. Let me try again.';
+      }
     }
 
     // Send response back to user

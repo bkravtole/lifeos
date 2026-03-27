@@ -233,18 +233,66 @@ Return ONLY JSON:
     return 'english';
   }
 
-  async generateResponse(intent, entities, userContext = {}, currentUserMessage = '') {
+  async generateResponse(intent, entities, userContext = {}, currentUserMessage = '', routeResult = {}) {
     try {
-      // ALWAYS detect language from CURRENT user message (latest message)
       const lang = this.detectLanguage(currentUserMessage);
-      
-      // Build rich profile context for personal, warm responses
-      let profileContext = this._buildPersonalContext(userContext);
+      const userName = userContext?.userProfile?.name || '';
 
+      // INTENT-SPECIFIC RESPONSES (priority over generic AI-generated responses)
+      if (intent === 'CREATE_REMINDER') {
+        const activity = entities?.activity || 'reminder';
+        const time = entities?.time || 'the specified time';
+        
+        if (lang === 'hindi') {
+          return `✅ ठीक है! मैंने आपको ${activity} की याद दिलाने के लिए ${time} पर remind करने का सेट कर दिया है। 🔔`;
+        } else if (lang === 'hinglish') {
+          return `✅ Done! Maine aapko ${activity} ke liye ${time} par reminder set kar diya hai. 🔔`;
+        } else {
+          return `✅ Got it! I'll remind you to ${activity} at ${time}. 🔔`;
+        }
+      }
+
+      if (intent === 'LOG_ACTIVITY') {
+        const activity = entities?.activity || 'activity';
+        
+        if (lang === 'hindi') {
+          return `✅ शानदार! मैंने दर्ज कर दिया कि आपने ${activity} पूरा कर लिया। आपके आप पर गर्व है! 💪`;
+        } else if (lang === 'hinglish') {
+          return `✅ Awesome! Maine log kar diya ki aapne ${activity} complete kar liya. Proud of you! 💪`;
+        } else {
+          return `✅ Awesome! I've logged that you completed ${activity}. Great work! 💪`;
+        }
+      }
+
+      if (intent === 'CREATE_ROUTINE') {
+        const activity = entities?.activity || 'routine';
+        const time = entities?.time || 'specified time';
+        
+        if (lang === 'hindi') {
+          return `✅ बिल्कुल! मैंने आपके लिए ${activity} का daily routine ${time} पर सेट कर दिया है। 📅`;
+        } else if (lang === 'hinglish') {
+          return `✅ Bilkul! Maine ${activity} ka daily routine ${time} par set kar diya. 📅`;
+        } else {
+          return `✅ Perfect! I've set up a daily routine for ${activity} at ${time}. 📅`;
+        }
+      }
+
+      if (intent === 'DELETE_REMINDER') {
+        if (lang === 'hindi') {
+          return `✅ जैसे चाहो! मैंने उस reminder को डिलीट कर दिया। 🗑️`;
+        } else if (lang === 'hinglish') {
+          return `✅ Bilkul! Maine us reminder ko delete kar diya. 🗑️`;
+        } else {
+          return `✅ Done! I've deleted that reminder. 🗑️`;
+        }
+      }
+
+      // For CHAT and other intents, use AI-generated response
+      let profileContext = this._buildPersonalContext(userContext);
       let systemPrompt = '';
       
       if (lang === 'english') {
-        systemPrompt = `You are ${userContext?.userProfile?.name ? userContext.userProfile.name + "'s" : "the"} personal AI assistant - like a helpful friend who genuinely cares about their wellbeing.
+        systemPrompt = `You are ${userName ? userName + "'s" : "the"} personal AI assistant - like a helpful friend who genuinely cares about their wellbeing.
 
 PERSONALITY TRAITS:
 - Warm, genuine, and conversational (not corporate or robotic)
@@ -258,12 +306,9 @@ RESPONSE GUIDELINES:
 - Be concise (1-3 sentences max) but warm
 - Use occasional emojis naturally (not overdone)
 - Reference their profile naturally - don't list it
-- If business user: treat responses as if you're their trusted advisor/business partner
-- If personal user: be like a supportive friend who knows them
-- Always reply in English since they just wrote in English
 - Make them feel understood and valued${profileContext}`;
       } else if (lang === 'hindi') {
-        systemPrompt = `आप ${userContext?.userProfile?.name ? userContext.userProfile.name + 'के' : 'एक'} व्यक्तिगत AI सहायक हैं - एक सहायक दोस्त की तरह जो उनकी भलाई की परवाह करता है।
+        systemPrompt = `आप ${userName ? userName + 'के' : 'एक'} व्यक्तिगत AI सहायक हैं - एक सहायक दोस्त की तरह जो उनकी भलाई की परवाह करता है।
 
 व्यक्तित्व गुण:
 - गर्मजोशी भरा, प्रामाणिक और बातचीत करने वाला
@@ -276,11 +321,10 @@ RESPONSE GUIDELINES:
 जवाब के नियम:
 - संक्षिप्त (1-3 वाक्य) लेकिन गर्म रहें
 - कभी-कभी इमोजी प्राकृतिक रूप से उपयोग करें
-- उनकी प्रोफाइल को स्वाभाविक रूप से संदर्भित करें
 - हमेशा हिंदी में जवाब दें${profileContext}`;
       } else {
         // Hinglish - conversational mix
-        systemPrompt = `Aap ${userContext?.userProfile?.name ? userContext.userProfile.name + 'ke' : 'ek'} personal AI assistant ho - jaise ek helpful dost jo unhe sach mein care karta hai.
+        systemPrompt = `Aap ${userName ? userName + 'ke' : 'ek'} personal AI assistant ho - jaise ek helpful dost jo unhe sach mein care karta hai.
 
 Personality:
 - Warm, genuine, conversational (robotic nahi)
@@ -293,15 +337,12 @@ Personality:
 Response tips:
 - 1-3 sentences, warm tone
 - Kuch kuch emoji naturally use karo
-- Profile ko naturally reference karo
 - Hinglish mix use karo jaise vo kar rahe ho${profileContext}`;
       }
 
-      const userPrompt = `Intent: ${intent}
-Activity/Topic: ${entities?.activity || 'Not specified'}
-User's just said: "${currentUserMessage}"
+      const userPrompt = `User just asked: "${currentUserMessage}"
 
-Generate a warm, personal response that feels like it's coming from their trusted friend/assistant. Make them feel valued and understood.`;
+Respond naturally and warmly. Be concise (1-2 sentences). Don't list things.`;
 
       const msgs = [
         {
@@ -319,17 +360,14 @@ Generate a warm, personal response that feels like it's coming from their truste
     } catch (error) {
       logger.error('Response generation failed:', error.message);
       
-      // Fallback response with language priority: English > Hinglish > Hindi
       const lang = this.detectLanguage(currentUserMessage);
-      const userName = userContext?.userProfile?.name || '';
       
       if (lang === 'hindi') {
-        return `${userName ? userName + ', ' : ''}रुको! मैं सोच रहा हूँ... 🤔`;
+        return `कुछ गलती हुई 😅 फिर से कोशिश करो।`;
       } else if (lang === 'hinglish') {
-        return `${userName ? userName + ', ' : ''}ek second! Main soch raha hoon... 🤔`;
+        return `Kuch error ho gaya 😅. Phir se try karo na.`;
       } else {
-        // English (default/priority)
-        return `${userName ? 'Hold on ' + userName + '!' : 'Just a moment!'} I'm thinking... 🤔`;
+        return `Oops! Something went wrong. Let me try again.`;
       }
     }
   }
