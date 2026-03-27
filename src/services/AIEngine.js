@@ -240,11 +240,12 @@ Return ONLY JSON:
 
       // INTENT-SPECIFIC RESPONSES (priority over generic AI-generated responses)
       if (intent === 'CREATE_REMINDER') {
-        const activity = entities?.activity || 'reminder';
-        const time = entities?.time || 'the specified time';
+        // Extract activity and time - try multiple sources
+        let activity = entities?.activity || this._extractActivity(currentUserMessage) || 'reminder';
+        let time = entities?.time || this._extractTime(currentUserMessage) || 'the specified time';
         
         if (lang === 'hindi') {
-          return `✅ ठीक है! मैंने आपको ${activity} की याद दिलाने के लिए ${time} पर remind करने का सेट कर दिया है। 🔔`;
+          return `✅ ठीक है! मैंने आपको ${activity} की याद दिलाने के लिए ${time} पर रिमाइंडर सेट कर दिया है। 🔔`;
         } else if (lang === 'hinglish') {
           return `✅ Done! Maine aapko ${activity} ke liye ${time} par reminder set kar diya hai. 🔔`;
         } else {
@@ -253,20 +254,20 @@ Return ONLY JSON:
       }
 
       if (intent === 'LOG_ACTIVITY') {
-        const activity = entities?.activity || 'activity';
+        let activity = entities?.activity || this._extractActivity(currentUserMessage) || 'activity';
         
         if (lang === 'hindi') {
-          return `✅ शानदार! मैंने दर्ज कर दिया कि आपने ${activity} पूरा कर लिया। आपके आप पर गर्व है! 💪`;
+          return `✅ शानदार! मैंने दर्ज कर दिया कि आपने ${activity} पूरा कर लिया। शानदार काम! 💪`;
         } else if (lang === 'hinglish') {
-          return `✅ Awesome! Maine log kar diya ki aapne ${activity} complete kar liya. Proud of you! 💪`;
+          return `✅ Awesome! Maine log kar diya ki aapne ${activity} complete kar liya. Great work! 💪`;
         } else {
           return `✅ Awesome! I've logged that you completed ${activity}. Great work! 💪`;
         }
       }
 
       if (intent === 'CREATE_ROUTINE') {
-        const activity = entities?.activity || 'routine';
-        const time = entities?.time || 'specified time';
+        let activity = entities?.activity || this._extractActivity(currentUserMessage) || 'routine';
+        let time = entities?.time || this._extractTime(currentUserMessage) || 'specified time';
         
         if (lang === 'hindi') {
           return `✅ बिल्कुल! मैंने आपके लिए ${activity} का daily routine ${time} पर सेट कर दिया है। 📅`;
@@ -279,7 +280,7 @@ Return ONLY JSON:
 
       if (intent === 'DELETE_REMINDER') {
         if (lang === 'hindi') {
-          return `✅ जैसे चाहो! मैंने उस reminder को डिलीट कर दिया। 🗑️`;
+          return `✅ जैसे चाहो! मैंने उस रिमाइंडर को डिलीट कर दिया। 🗑️`;
         } else if (lang === 'hinglish') {
           return `✅ Bilkul! Maine us reminder ko delete kar diya. 🗑️`;
         } else {
@@ -370,6 +371,48 @@ Respond naturally and warmly. Be concise (1-2 sentences). Don't list things.`;
         return `Oops! Something went wrong. Let me try again.`;
       }
     }
+  }
+
+  /**
+   * Extract activity from message (fallback)
+   */
+  _extractActivity(message) {
+    // Look for common patterns like "remind me to [activity]" or "call [person]"
+    const patterns = [
+      /remind me to (.+?)(?:at|today|tomorrow|,|$)/i,
+      /call (.+?)(?:at|today|,|$)/i,
+      /send (.+?)(?:to|at|today|,|$)/i,
+      /do (.+?)(?:at|today|,|$)/i,
+      /log (.+?)(?:today|$)/i,
+    ];
+    
+    for (const pattern of patterns) {
+      const match = message.match(pattern);
+      if (match && match[1]) {
+        return match[1].trim();
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Extract time from message (fallback)
+   */
+  _extractTime(message) {
+    // Look for time patterns
+    const patterns = [
+      /(\d{1,2}):(\d{2})\s*(am|pm)?/i,
+      /(today|tomorrow|tonight)/i,
+      /at (.+?)(?:,|$)/i,
+    ];
+    
+    for (const pattern of patterns) {
+      const match = message.match(pattern);
+      if (match) {
+        return match[0];
+      }
+    }
+    return null;
   }
 
   /**

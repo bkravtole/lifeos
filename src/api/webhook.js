@@ -121,7 +121,14 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
       });
       await user.save();
       isNewUser = true;
-      logger.info('New user created:', { userId: user._id, phone: rawMessage.from, language: userLanguage });
+      logger.info('🆕 New user created:', { userId: user._id, phone: rawMessage.from, language: userLanguage });
+    } else {
+      logger.debug('👤 Existing user found:', {
+        userId: user._id,
+        onboardingCompleted: user.onboardingCompleted,
+        onboardingStep: user.onboardingStep,
+        userType: user.userType
+      });
     }
 
     // Update user metadata
@@ -161,8 +168,21 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
         // Process onboarding response
         try {
           const onboardingResult = await OnboardingService.processResponse(user._id, processedMessage.text);
+          logger.debug('Onboarding result:', { 
+            completed: onboardingResult.completed, 
+            step: onboardingResult.step,
+            userTypeFromService: onboardingResult.userType
+          });
           
           if (onboardingResult.completed) {
+            // ✅ ONBOARDING IS COMPLETE - Refresh user from database
+            user = await User.findById(user._id);
+            logger.info('✅ ONBOARDING COMPLETED:', { 
+              userId: user._id, 
+              onboardingCompleted: user.onboardingCompleted,
+              userType: user.userType
+            });
+            
             // Warm completion message based on user type AND language priority
             const userName = user.name || 'Friend';
             const lang = aiEngine.detectLanguage(processedMessage.text);
@@ -191,6 +211,15 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
             }
             
             await whatsappService.sendMessage(rawMessage.from, completionMsg);
+            await ContextEngine.addMessage(user._id, 'user', processedMessage.text);
+            
+            return res.status(200).json({
+              success: true,
+              messageId: rawMessage.messageId,
+              mode: 'onboarding',
+              step: onboardingResult.step,
+              completed: true
+            });
           } else if (onboardingResult.nextQuestion) {
             await whatsappService.sendMessage(rawMessage.from, onboardingResult.nextQuestion);
           } else {
@@ -219,7 +248,7 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
             completed: onboardingResult.completed
           });
         } catch (error) {
-          logger.error('Onboarding processing error:', error.message);
+          logger.error('Onboarding processing error:', error.message, error.stack);
           await whatsappService.sendMessage(rawMessage.from, 'कृपया फिर से कोशिश करें। (Please try again)');
           return res.status(200).json({
             success: false,
@@ -412,10 +441,14 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
 
       responseText = await aiEngine.generateResponse(
         aiResult.intent,
-        aiResult.entities || {},
+        {
+          ...aiResult.entities,
+          activity: aiResult.activity,  // ← Pass top-level activity
+          time: aiResult.time            // ← Pass top-level time
+        },
         contextWithProfile,
-        processedMessage.text,  // Pass current user message for language detection
-        routeResult  // Pass result of intent handling (success/failure, data)
+        processedMessage.text,
+        routeResult
       );
     } catch (error) {
       logger.warn('Response generation failed, using fallback:', error.message);

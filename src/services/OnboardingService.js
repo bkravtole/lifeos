@@ -407,7 +407,15 @@ class OnboardingService {
       const questions = this.getQuestionsForUserType(user.userType, user.preferredLanguage);
       const currentStep = user.onboardingStep;
 
+      logger.debug('Processing onboarding response:', {
+        userId,
+        currentStep,
+        totalQuestions: questions.length,
+        currentOnboardingStatus: user.onboardingCompleted
+      });
+
       if (currentStep >= questions.length) {
+        logger.info('User already completed onboarding:', { userId });
         return {
           completed: true,
           message: 'आपकी प्रोफाइल पूरी हो गई है! 🎉\n\n(Your profile is complete! 🎉)',
@@ -429,13 +437,28 @@ class OnboardingService {
       user.onboardingStep = currentStep + 1;
 
       // Mark as completed if all steps done
-      if (user.onboardingStep >= questions.length) {
+      const willBeCompleted = user.onboardingStep >= questions.length;
+      if (willBeCompleted) {
         user.onboardingCompleted = true;
         user.onboardingStep = questions.length; // Cap at max
-        logger.info('Onboarding completed for user:', { userId, userType: user.userType });
+        logger.warn('🟢 MARKING ONBOARDING AS COMPLETE:', { 
+          userId, 
+          userType: user.userType,
+          finalStep: user.onboardingStep
+        });
       }
 
+      // 🔴 CRITICAL: Save to database
       await user.save();
+      
+      // Verify save worked
+      const verifiedUser = await User.findById(userId);
+      logger.info('✅ Verification after save:', {
+        userId,
+        onboardingCompleted: verifiedUser.onboardingCompleted,
+        onboardingStep: verifiedUser.onboardingStep,
+        expectedCompleted: willBeCompleted
+      });
 
       // Get next question or completion message
       let nextQuestion = null;
@@ -451,7 +474,10 @@ class OnboardingService {
         nextQuestion
       };
     } catch (error) {
-      logger.error('Failed to process onboarding response:', error.message);
+      logger.error('Failed to process onboarding response:', {
+        error: error.message,
+        stack: error.stack
+      });
       return {
         completed: false,
         error: error.message
