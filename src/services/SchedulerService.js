@@ -39,34 +39,61 @@ export class SchedulerService {
   scheduleReminders() {
     const job = cron.schedule('* * * * *', async () => {
       try {
+        const now = new Date();
         const reminders = await ReminderService.getRemindersdue();
+
+        logger.debug(`📋 Reminder check at ${now.toISOString()} - found ${reminders.length} pending reminders`);
 
         for (const reminder of reminders) {
           try {
+            const shouldSend = this.shouldSendReminder(reminder);
+            const reminderTime = new Date(reminder.datetime);
+            
+            logger.debug(`   Reminder: ${reminder.title}`, {
+              reminderId: reminder._id,
+              reminderTime: reminderTime.toISOString(),
+              repeat: reminder.repeat,
+              notified: reminder.notified,
+              shouldSend: shouldSend,
+              currentTime: now.toISOString(),
+              currentHour: now.getHours(),
+              currentMinute: now.getMinutes(),
+              reminderHour: reminderTime.getHours(),
+              reminderMinute: reminderTime.getMinutes()
+            });
+
             // Check if reminder should be sent based on repeat pattern
-            if (this.shouldSendReminder(reminder)) {
+            if (shouldSend) {
               // Get user phone from populated userId
               const userPhone = reminder.userId?.phone;
               
-              if (userPhone) {
-                // Send WhatsApp reminder
-                await this.whatsappService.sendMessage(
-                  userPhone,
-                  `⏰ ${reminder.title}\n\n${reminder.description || ''}`
-                );
-
-                // Mark as notified
-                await ReminderService.markNotified(reminder._id);
-
-                logger.info('Reminder sent:', {
-                  reminderId: reminder._id,
-                  phone: userPhone,
-                  title: reminder.title
-                });
+              if (!userPhone) {
+                logger.error('Reminder has no user phone:', { reminderId: reminder._id });
+                continue;
               }
+              
+              // Send WhatsApp reminder
+              await this.whatsappService.sendMessage(
+                userPhone,
+                `⏰ ${reminder.title}\n\n${reminder.description || ''}`
+              );
+
+              // Mark as notified
+              await ReminderService.markNotified(reminder._id);
+
+              logger.info('✅ Reminder sent successfully:', {
+                reminderId: reminder._id,
+                phone: userPhone,
+                title: reminder.title,
+                sentAt: new Date().toISOString()
+              });
             }
           } catch (error) {
-            logger.error('Failed to send reminder:', error.message);
+            logger.error('Failed to send reminder:', {
+              reminderId: reminder._id,
+              error: error.message,
+              stack: error.stack
+            });
           }
         }
       } catch (error) {

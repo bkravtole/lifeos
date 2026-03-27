@@ -265,9 +265,18 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
             // Parse time string to datetime if needed
             let reminderDateTime = entities.datetime || entities.time;
             
+            logger.debug('Creating reminder with entities:', {
+              entities: JSON.stringify(entities),
+              rawDateTime: reminderDateTime
+            });
+            
             if (typeof reminderDateTime === 'string') {
               // Parse time string like "09:00", "2:30 PM", "tomorrow 9 AM" etc
               reminderDateTime = parseTimeToDateTime(reminderDateTime);
+              logger.debug('Parsed time:', {
+                input: entities.datetime || entities.time,
+                output: reminderDateTime ? reminderDateTime.toISOString() : null
+              });
             }
             
             // If still not a Date, use tomorrow at specified time
@@ -275,6 +284,9 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
               reminderDateTime = new Date();
               reminderDateTime.setDate(reminderDateTime.getDate() + 1);
               reminderDateTime.setHours(9, 0, 0, 0);
+              logger.warn('Using fallback reminder time (tomorrow 9 AM):', {
+                fallbackTime: reminderDateTime.toISOString()
+              });
             }
             
             const reminder = await ReminderService.createReminder(user._id, {
@@ -285,7 +297,11 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
               priority: entities.priority || 'medium',
               description: entities.description
             });
-            logger.info('Reminder created:', { reminderId: reminder._id, time: reminderDateTime });
+            logger.info('✅ Reminder created:', { 
+              reminderId: reminder._id, 
+              title: reminder.title,
+              datetime: reminder.datetime.toISOString()
+            });
             return { success: true, data: reminder };
           } catch (error) {
             logger.error('Failed to create reminder:', error.message);
