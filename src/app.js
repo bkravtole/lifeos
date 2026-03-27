@@ -14,8 +14,20 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(requestLogger);
 
-// Health check endpoint (this runs immediately)
+// ROOT endpoint - always works
+app.get('/', (req, res) => {
+  console.log('🟢 ROOT endpoint hit');
+  logger.info('✅ ROOT endpoint hit');
+  res.status(200).json({
+    status: 'alive',
+    message: 'LifeOS API is running',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Health check endpoint
 app.get('/api/health', (req, res) => {
+  console.log('🟢 Health check hit');
   logger.info('✅ Health check requested');
   res.status(200).json({
     status: 'healthy',

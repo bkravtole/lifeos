@@ -3,7 +3,7 @@ import { verifyWebhookSignature } from '../middleware/index.js';
 import MessageProcessor from '../services/MessageProcessor.js';
 import AIEngine from '../services/AIEngine.js';
 import IntentRouter from '../services/IntentRouter.js';
-import WhatsAppService from '../services/WhatsAppService.js';
+import whatsapp from '../services/WhatsAppService.js';
 import ContextEngine from '../services/ContextEngine.js';
 import ReminderService from '../services/ReminderService.js';
 import RoutineService from '../services/RoutineService.js';
@@ -17,10 +17,24 @@ let aiEngine, whatsappService;
 // Initialize services
 try {
   aiEngine = new AIEngine();
-  whatsappService = new WhatsAppService();
+  whatsappService = new whatsapp();
 } catch (error) {
   logger.error('Failed to initialize services:', error.message);
 }
+
+/**
+ * GET /webhook/ping
+ * Simple ping - MUST ALWAYS WORK
+ */
+router.get('/ping', (req, res) => {
+  console.log('🟢🟢🟢 WEBHOOK PING HIT 🟢🟢🟢');
+  logger.info('🟢 WEBHOOK PING HIT - Server is responding');
+  res.status(200).json({
+    status: 'pong',
+    message: 'Webhook endpoint is accessible',
+    timestamp: new Date().toISOString()
+  });
+});
 
 /**
  * POST /webhook/whatsapp
