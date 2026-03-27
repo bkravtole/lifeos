@@ -90,7 +90,21 @@ export class SchedulerService {
     const reminderHour = reminderTime.getHours();
     const reminderMinute = reminderTime.getMinutes();
     
-    // Time matches if hour and minute are the same
+    // For one-time reminders: send if time has passed and not yet notified
+    if (reminder.repeat === 'none') {
+      // For past or current reminders that haven't been notified, send them
+      if (!reminder.notified && reminderTime <= now) {
+        logger.info('One-time reminder due (time passed):', {
+          reminderId: reminder._id,
+          reminderTime: reminderTime.toISOString(),
+          now: now.toISOString()
+        });
+        return true;
+      }
+      return false;
+    }
+    
+    // For recurring reminders: check exact time match (hour and minute)
     if (currentHour !== reminderHour || currentMinute !== reminderMinute) {
       return false;
     }
@@ -104,10 +118,9 @@ export class SchedulerService {
     } else if (reminder.repeat === 'monthly') {
       // Send if today is the same date of month as reminder date
       return now.getDate() === reminderTime.getDate();
-    } else {
-      // 'none' - send only once if not yet notified
-      return !reminder.notified && reminderTime <= now;
     }
+    
+    return false;
   }
 
   /**
