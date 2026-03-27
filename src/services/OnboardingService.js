@@ -530,7 +530,7 @@ class OnboardingService {
       // Get next question or completion message
       let nextQuestion = null;
       if (user.onboardingStep < questions.length) {
-        nextQuestion = this.getQuestion(userId, user.onboardingStep, user.userType);
+        nextQuestion = this.getQuestion(user.onboardingStep, user.userType, user.preferredLanguage);
       }
 
       return {

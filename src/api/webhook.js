@@ -196,6 +196,18 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
             await whatsappService.sendMessage(rawMessage.from, completionMsg);
           } else if (onboardingResult.nextQuestion) {
             await whatsappService.sendMessage(rawMessage.from, onboardingResult.nextQuestion);
+          } else {
+            // Fallback: send acknowledgement if no next question
+            const lang = user.preferredLanguage;
+            let fallbackMsg = '';
+            if (lang === 'hindi') {
+              fallbackMsg = '✅ धन्यवाद! अगला सवाल अभी आ रहा है... 💭';
+            } else if (lang === 'hinglish') {
+              fallbackMsg = '✅ Thanks! Agle sawaal aa raha hai... 💭';
+            } else {
+              fallbackMsg = '✅ Got it! Next question coming up... 💭';
+            }
+            await whatsappService.sendMessage(rawMessage.from, fallbackMsg);
           }
           
           // Store in conversation
