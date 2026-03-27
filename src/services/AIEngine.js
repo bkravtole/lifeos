@@ -40,21 +40,49 @@ export class AIEngine {
 
   /**
    * Detect intent from user message
-   * Returns: { intent, confidence, entities, activity, time }
+   * Returns: { intent, confidence, entities, activity, time, language }
    */
   async detectIntent(message, context = {}) {
     try {
-      const systemPrompt = `You are LifeOS AI assistant. Analyze the message and detect intent.
+      // Detect language of current message
+      const lang = this.detectLanguage(message);
+      
+      let systemPrompt = '';
+      if (lang === 'english') {
+        systemPrompt = `You are LifeOS AI assistant trained to deeply understand what users really need. Analyze their message with context and common sense - don't just look for keywords.
+        
 Return ONLY valid JSON (no markdown, no code blocks) with this structure:
 {
-  "intent": "CREATE_REMINDER|LOG_ACTIVITY|CHAT|QUERY_ROUTINE|DELETE_REMINDER|UPDATE_ROUTINE|CREATE_ROUTINE",
+  "intent": "CREATE_REMINDER|LOG_ACTIVITY|CHAT|QUERY_ROUTINE|DELETE_REMINDER|UPDATE_ROUTINE|CREATE_ROUTINE|CREATE_CLIENT|LOG_INVOICE|SCHEDULE_MEETING|LOG_LEAD|CREATE_PROJECT",
   "confidence": 0.95,
   "activity": "activity name if applicable",
   "time": "time/datetime if applicable",
   "entities": {}
 }
-Message language: Hindi/English (Hinglish)
-User context: ${JSON.stringify(context)}`;
+
+Context about user: ${JSON.stringify(context)}`;
+      } else if (lang === 'hindi') {
+        systemPrompt = `आप LifeOS AI सहायक हैं जो गहरी समझ रखते हैं। संदेश का विश्लेषण करें और असली जरूरत समझें।
+केवल वैध JSON लौटाएं (कोई मार्कडाउन नहीं):
+{
+  "intent": "CREATE_REMINDER|LOG_ACTIVITY|CHAT|QUERY_ROUTINE|DELETE_REMINDER|UPDATE_ROUTINE|CREATE_ROUTINE|CREATE_CLIENT|LOG_INVOICE|SCHEDULE_MEETING|LOG_LEAD|CREATE_PROJECT",
+  "confidence": 0.95,
+  "activity": "गतिविधि का नाम यदि लागू हो",
+  "time": "समय/दिनांक यदि लागू हो",
+  "entities": {}
+}`;
+      } else {
+        // Hinglish
+        systemPrompt = `You are LifeOS AI assistant. Samjhiye kyaa real need hai user ko. Analyze message smartly.
+Return ONLY valid JSON:
+{
+  "intent": "CREATE_REMINDER|LOG_ACTIVITY|CHAT|QUERY_ROUTINE|DELETE_REMINDER|UPDATE_ROUTINE|CREATE_ROUTINE|CREATE_CLIENT|LOG_INVOICE|SCHEDULE_MEETING|LOG_LEAD|CREATE_PROJECT",
+  "confidence": 0.95,
+  "activity": "activity name agar relevant ho",
+  "time": "time/datetime agar relevant ho",
+  "entities": {}
+}`;
+      }
 
       const msgs = [
         {
@@ -75,7 +103,8 @@ User context: ${JSON.stringify(context)}`;
         confidence: parsed.confidence || 0.7,
         entities: parsed.entities || {},
         activity: parsed.activity,
-        time: parsed.time
+        time: parsed.time,
+        language: lang
       };
     } catch (error) {
       logger.error('Intent detection failed:', error.message);
@@ -84,7 +113,8 @@ User context: ${JSON.stringify(context)}`;
         confidence: 0.5,
         entities: {},
         activity: null,
-        time: null
+        time: null,
+        language: 'english'
       };
     }
   }
@@ -126,19 +156,89 @@ User context: ${JSON.stringify(context)}`;
   /**
    * Generate response based on context
    */
-  async generateResponse(intent, entities, userContext = {}) {
+  // Detect language: English, Hindi (Devanagari), or Hinglish (default to English priority)
+  detectLanguage(text) {
+    // If mostly English letters, treat as English
+    if (/^[a-zA-Z0-9 ,.'"?!@#$%^&*()_+\-=;:<>/\\|`~\[\]{}]+$/.test(text)) {
+      return 'english';
+    }
+    // If contains Devanagari, treat as Hindi
+    if (/[\u0900-\u097F]+/.test(text)) {
+      return 'hindi';
+    }
+    // Otherwise, treat as Hinglish (but reply in English for priority)
+    return 'english';
+  }
+
+  async generateResponse(intent, entities, userContext = {}, currentUserMessage = '') {
     try {
-      const systemPrompt = `You are LifeOS AI assistant - a friendly Hindi/Hinglish speaking bot.
-Generate a helpful, concise response. Use emojis occasionally but not excessively.
-Be encouraging and supportive.
-Response should be 1-3 sentences max.
-Language: Hindi/Hinglish mix`;
+      // ALWAYS detect language from CURRENT user message (latest message)
+      const lang = this.detectLanguage(currentUserMessage);
+      
+      // Build rich profile context for personal, warm responses
+      let profileContext = this._buildPersonalContext(userContext);
+
+      let systemPrompt = '';
+      
+      if (lang === 'english') {
+        systemPrompt = `You are ${userContext?.userProfile?.name ? userContext.userProfile.name + "'s" : "the"} personal AI assistant - like a helpful friend who genuinely cares about their wellbeing.
+
+PERSONALITY TRAITS:
+- Warm, genuine, and conversational (not corporate or robotic)
+- Remembers their preferences and references them naturally
+- Proactive yet respectful - offers suggestions when relevant
+- Uses their name occasionally to feel personal
+- Shows genuine interest in their goals and daily life
+- Supportive and encouraging, especially during challenges
+
+RESPONSE GUIDELINES:
+- Be concise (1-3 sentences max) but warm
+- Use occasional emojis naturally (not overdone)
+- Reference their profile naturally - don't list it
+- If business user: treat responses as if you're their trusted advisor/business partner
+- If personal user: be like a supportive friend who knows them
+- Always reply in English since they just wrote in English
+- Make them feel understood and valued${profileContext}`;
+      } else if (lang === 'hindi') {
+        systemPrompt = `आप ${userContext?.userProfile?.name ? userContext.userProfile.name + 'के' : 'एक'} व्यक्तिगत AI सहायक हैं - एक सहायक दोस्त की तरह जो उनकी भलाई की परवाह करता है।
+
+व्यक्तित्व गुण:
+- गर्मजोशी भरा, प्रामाणिक और बातचीत करने वाला
+- उनकी प्राथमिकताओं को याद रखता है और स्वाभाविक रूप से संदर्भ देता है
+- सक्रिय फिर भी सम्मानजनक - प्रासंगिक सुझाव देता है
+- कभी-कभी उनका नाम उपयोग करता है
+- उनके लक्ष्यों में वास्तविक रुचि दिखाता है
+- समर्थनकारी और उत्साहवर्धक
+
+जवाब के नियम:
+- संक्षिप्त (1-3 वाक्य) लेकिन गर्म रहें
+- कभी-कभी इमोजी प्राकृतिक रूप से उपयोग करें
+- उनकी प्रोफाइल को स्वाभाविक रूप से संदर्भित करें
+- हमेशा हिंदी में जवाब दें${profileContext}`;
+      } else {
+        // Hinglish - conversational mix
+        systemPrompt = `Aap ${userContext?.userProfile?.name ? userContext.userProfile.name + 'ke' : 'ek'} personal AI assistant ho - jaise ek helpful dost jo unhe sach mein care karta hai.
+
+Personality:
+- Warm, genuine, conversational (robotic nahi)
+- Unke preferences ko yaad rakhte ho aur naturally reference karte ho
+- Proactive lekin respectful - suggestions dete ho jab relevant ho
+- Unka naam kabhi-kabhi use karte ho
+- Genuine interest dikha sakte ho unke goals mein
+- Supportive aur encouraging
+
+Response tips:
+- 1-3 sentences, warm tone
+- Kuch kuch emoji naturally use karo
+- Profile ko naturally reference karo
+- Hinglish mix use karo jaise vo kar rahe ho${profileContext}`;
+      }
 
       const userPrompt = `Intent: ${intent}
-Activity: ${entities?.activity || 'N/A'}
-User Context: ${JSON.stringify(userContext)}
+Activity/Topic: ${entities?.activity || 'Not specified'}
+User's just said: "${currentUserMessage}"
 
-Generate a response message.`;
+Generate a warm, personal response that feels like it's coming from their trusted friend/assistant. Make them feel valued and understood.`;
 
       const msgs = [
         {
@@ -155,8 +255,73 @@ Generate a response message.`;
       return response.trim();
     } catch (error) {
       logger.error('Response generation failed:', error.message);
-      return 'समझ नहीं आया 😅 फिर से बताओ';
+      
+      // Fallback response in detected language with personality
+      const lang = this.detectLanguage(currentUserMessage);
+      const userName = userContext?.userProfile?.name || '';
+      
+      if (lang === 'hindi') {
+        return `${userName ? userName + ', ' : ''}रुको! मैं सोच रहा हूँ... 🤔`;
+      } else if (lang === 'english') {
+        return `${userName ? 'Hold on ' + userName + '!' : 'Just a moment!'} I'm thinking... 🤔`;
+      } else {
+        return `${userName ? userName + ', ' : ''}ek second! Main soch raha hoon... 🤔`;
+      }
     }
+  }
+
+  /**
+   * Build personal context string for warmer responses
+   */
+  _buildPersonalContext(userContext) {
+    if (!userContext || !userContext.userProfile) {
+      return '';
+    }
+
+    const profile = userContext.userProfile;
+    let context = '\n\nKEY CONTEXT ABOUT USER:';
+
+    // Add name
+    if (profile.name) {
+      context += `\n- Name: ${profile.name}`;
+    }
+
+    if (profile.userType === 'business') {
+      // Business user context
+      if (profile.businessProfile?.businessName) {
+        context += `\n- Runs: ${profile.businessProfile.businessName}`;
+      }
+      if (profile.businessProfile?.businessType) {
+        context += `\n- Type: ${profile.businessProfile.businessType}`;
+      }
+      if (profile.businessProfile?.services && profile.businessProfile.services.length > 0) {
+        context += `\n- Offers: ${profile.businessProfile.services.join(', ')}`;
+      }
+      if (profile.businessProfile?.teamMembers) {
+        context += `\n- Team size: ${profile.businessProfile.teamMembers?.length || profile.businessProfile.numberOfEmployees || 'Growing'}`;
+      }
+      if (profile.businessProfile?.monthlyTarget) {
+        context += `\n- Monthly target: ${profile.businessProfile.monthlyTarget} ${profile.businessProfile.currency || 'INR'}`;
+      }
+      context += `\n- Tone: Professional, advisory, growth-focused. Reference their business goals naturally.`;
+    } else {
+      // Personal user context
+      if (profile.dailyActivities && profile.dailyActivities.length > 0) {
+        context += `\n- Daily activities: ${profile.dailyActivities.join(', ')}`;
+      }
+      if (profile.hobbies && profile.hobbies.length > 0) {
+        context += `\n- Hobbies: ${profile.hobbies.join(', ')}`;
+      }
+      if (profile.workSchedule?.startTime) {
+        context += `\n- Works: ${profile.workSchedule.startTime} to ${profile.workSchedule.endTime || 'Evening'}`;
+      }
+      if (profile.reminderPreferences?.enableReminders) {
+        context += `\n- Likes reminders and organization`;
+      }
+      context += `\n- Tone: Friendly, supportive, encouraging. Like a caring friend who gets them.`;
+    }
+
+    return context;
   }
 
   /**

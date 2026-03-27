@@ -8,6 +8,7 @@ import ContextEngine from '../services/ContextEngine.js';
 import ReminderService from '../services/ReminderService.js';
 import RoutineService from '../services/RoutineService.js';
 import ActivityService from '../services/ActivityService.js';
+import OnboardingService from '../services/OnboardingService.js';
 import User from '../models/User.js';
 import logger from '../utils/logger.js';
 import { connectDB } from '../utils/database.js';
@@ -67,12 +68,16 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
 
     // Ensure user exists in DB
     let user = await User.findOne({ phone: rawMessage.from });
+    let isNewUser = false;
     if (!user) {
       user = new User({
         phone: rawMessage.from,
-        name: rawMessage.senderName || 'User'
+        name: rawMessage.senderName || 'User',
+        onboardingCompleted: false,
+        onboardingStep: 0
       });
       await user.save();
+      isNewUser = true;
       logger.info('New user created:', { userId: user._id, phone: rawMessage.from });
     }
 
@@ -80,6 +85,72 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
     user.metadata.lastMessageAt = new Date();
     user.metadata.totalMessages = (user.metadata.totalMessages || 0) + 1;
     await user.save();
+
+    // ============ ONBOARDING FLOW ============
+    if (!user.onboardingCompleted) {
+      logger.info('User is in onboarding:', { userId: user._id, step: user.onboardingStep });
+      
+      if (isNewUser) {
+        // First message - send warm welcome + first question
+        const welcomeMsg = '🎉 LifeOS में स्वागत है!\n\nमैं आपका personal AI assistant हूँ - और मैं आपको अपनी life को organize करने में मदद करूँगा। थोड़ा सा समय मुझे आपके बारे में बताएँ, फिर हम शुरू कर देंगे! 🚀\n\n(Welcome to LifeOS! I\'m your personal AI assistant - here to help organize your life. Tell me a bit about yourself, then we\'ll get started!)';
+        await whatsappService.sendMessage(rawMessage.from, welcomeMsg);
+        
+        // Small delay then send first question
+        setTimeout(async () => {
+          const firstQuestion = OnboardingService.getFirstQuestion();
+          await whatsappService.sendMessage(rawMessage.from, firstQuestion);
+        }, 500);
+        
+        logger.info('Sent welcome message and first onboarding question:', { userId: user._id });
+        return res.status(200).json({
+          success: true,
+          messageId: rawMessage.messageId,
+          mode: 'onboarding',
+          step: 'question'
+        });
+      } else {
+        // Process onboarding response
+        try {
+          const onboardingResult = await OnboardingService.processResponse(user._id, processedMessage.text);
+          
+          if (onboardingResult.completed) {
+            // Warm completion message based on user type
+            const userName = user.name || 'Friend';
+            let completionMsg = '';
+            if (user.userType === 'business') {
+              completionMsg = `🎉 शानदार, ${userName}! आपकी business profile तैयार है!\n\nअब मैं आपके लिए एक personal business assistant की तरह काम करूँगा। clients, invoices, meetings को track करने में मदद दूँगा। बस कुछ भी कहो! 💼\n\n(Awesome, ${userName}! Your business profile is ready! Now I'll act as your business assistant. Just ask me anything! 💼)`;
+            } else {
+              completionMsg = `🎉 शानदार, ${userName}! तुम्हारा profile तैयार है!\n\nअब मैं तुम्हारे goals, reminders, और daily routine को manage करने में मदद दूँगा। बस कहो कि तुम क्या चाहते हो! 🚀\n\n(Awesome, ${userName}! Your profile is ready! Now I'll help manage your goals, reminders, and routine. Just tell me what you need! 🚀)`;
+            }
+            
+            await whatsappService.sendMessage(rawMessage.from, completionMsg);
+          } else if (onboardingResult.nextQuestion) {
+            await whatsappService.sendMessage(rawMessage.from, onboardingResult.nextQuestion);
+          }
+          
+          // Store in conversation
+          await ContextEngine.addMessage(user._id, 'user', processedMessage.text);
+          
+          logger.info('Onboarding response processed:', { userId: user._id, step: onboardingResult.step });
+          return res.status(200).json({
+            success: true,
+            messageId: rawMessage.messageId,
+            mode: 'onboarding',
+            step: onboardingResult.step,
+            completed: onboardingResult.completed
+          });
+        } catch (error) {
+          logger.error('Onboarding processing error:', error.message);
+          await whatsappService.sendMessage(rawMessage.from, 'कृपया फिर से कोशिश करें। (Please try again)');
+          return res.status(200).json({
+            success: false,
+            messageId: rawMessage.messageId,
+            error: error.message
+          });
+        }
+      }
+    }
+    // ============ END ONBOARDING FLOW ============
 
     // Get or create context
     const context = await ContextEngine.getContext(user._id);
@@ -215,10 +286,23 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
     // Generate response using AI (Groq)
     let responseText;
     try {
+      // Include user profile in context for personalization
+      const contextWithProfile = {
+        ...context.context,
+        userProfile: {
+          name: user.name,
+          dailyActivities: user.dailyActivities,
+          hobbies: user.hobbies,
+          workSchedule: user.workSchedule,
+          reminderPreferences: user.reminderPreferences
+        }
+      };
+
       responseText = await aiEngine.generateResponse(
         aiResult.intent,
         aiResult.entities || {},
-        context.context
+        contextWithProfile,
+        processedMessage.text  // Pass current user message for language detection
       );
     } catch (error) {
       logger.warn('Response generation failed, using fallback:', error.message);
