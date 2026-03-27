@@ -43,19 +43,28 @@ export class SchedulerService {
 
         for (const reminder of reminders) {
           try {
-            // Send WhatsApp reminder
-            await this.whatsappService.sendMessage(
-              reminder.userId?.phone,
-              `⏰ ${reminder.title}\n\n${reminder.description || ''}`
-            );
+            // Check if reminder should be sent based on repeat pattern
+            if (this.shouldSendReminder(reminder)) {
+              // Get user phone from populated userId
+              const userPhone = reminder.userId?.phone;
+              
+              if (userPhone) {
+                // Send WhatsApp reminder
+                await this.whatsappService.sendMessage(
+                  userPhone,
+                  `⏰ ${reminder.title}\n\n${reminder.description || ''}`
+                );
 
-            // Mark as notified
-            await ReminderService.markNotified(reminder._id);
+                // Mark as notified
+                await ReminderService.markNotified(reminder._id);
 
-            logger.info('Reminder sent:', {
-              reminderId: reminder._id,
-              phone: reminder.userId?.phone
-            });
+                logger.info('Reminder sent:', {
+                  reminderId: reminder._id,
+                  phone: userPhone,
+                  title: reminder.title
+                });
+              }
+            }
           } catch (error) {
             logger.error('Failed to send reminder:', error.message);
           }
@@ -66,6 +75,39 @@ export class SchedulerService {
     });
 
     this.jobs.set('reminders', job);
+  }
+
+  /**
+   * Check if reminder should be sent based on repeat pattern
+   */
+  shouldSendReminder(reminder) {
+    const now = new Date();
+    const reminderTime = new Date(reminder.datetime);
+    
+    // Check if current time matches reminder time (hour and minute)
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    const reminderHour = reminderTime.getHours();
+    const reminderMinute = reminderTime.getMinutes();
+    
+    // Time matches if hour and minute are the same
+    if (currentHour !== reminderHour || currentMinute !== reminderMinute) {
+      return false;
+    }
+    
+    // Check repeat pattern
+    if (reminder.repeat === 'daily') {
+      return true; // Send every day at this time
+    } else if (reminder.repeat === 'weekly') {
+      // Send if today is the same day of week as reminder date
+      return now.getDay() === reminderTime.getDay();
+    } else if (reminder.repeat === 'monthly') {
+      // Send if today is the same date of month as reminder date
+      return now.getDate() === reminderTime.getDate();
+    } else {
+      // 'none' - send only once if not yet notified
+      return !reminder.notified && reminderTime <= now;
+    }
   }
 
   /**

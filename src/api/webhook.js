@@ -25,6 +25,45 @@ try {
 }
 
 /**
+ * Parse time string to DateTime
+ * Handles formats like "09:00", "9 AM", "2:30 PM", "tomorrow 3 PM", etc.
+ */
+function parseTimeToDateTime(timeStr) {
+  if (!timeStr || typeof timeStr !== 'string') {
+    return null;
+  }
+
+  const now = new Date();
+  let targetDate = new Date(now);
+  let hour = 9, minute = 0; // default to 9 AM
+
+  const lowerStr = timeStr.toLowerCase().trim();
+
+  // Parse hour and minute
+  const timeMatch = lowerStr.match(/(\d{1,2}):?(\d{2})?\s*(am|pm)?/i);
+  if (timeMatch) {
+    hour = parseInt(timeMatch[1]);
+    minute = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+    
+    // Handle AM/PM
+    if (timeMatch[3]) {
+      const ampm = timeMatch[3].toLowerCase();
+      if (ampm === 'pm' && hour < 12) hour += 12;
+      if (ampm === 'am' && hour === 12) hour = 0;
+    }
+  }
+
+  // Check for "tomorrow", "next day", "day after" etc
+  if (lowerStr.includes('tomorrow') || lowerStr.includes('कल') || lowerStr.includes('agle din')) {
+    targetDate.setDate(targetDate.getDate() + 1);
+  }
+
+  targetDate.setHours(hour, minute, 0, 0);
+  return targetDate;
+}
+
+
+/**
  * GET /webhook/ping
  * Simple ping - MUST ALWAYS WORK
  */
@@ -114,13 +153,29 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
           const onboardingResult = await OnboardingService.processResponse(user._id, processedMessage.text);
           
           if (onboardingResult.completed) {
-            // Warm completion message based on user type
+            // Warm completion message based on user type AND language
             const userName = user.name || 'Friend';
+            const lang = aiEngine.detectLanguage(processedMessage.text);
+            
             let completionMsg = '';
             if (user.userType === 'business') {
-              completionMsg = `🎉 शानदार, ${userName}! आपकी business profile तैयार है!\n\nअब मैं आपके लिए एक personal business assistant की तरह काम करूँगा। clients, invoices, meetings को track करने में मदद दूँगा। बस कुछ भी कहो! 💼\n\n(Awesome, ${userName}! Your business profile is ready! Now I'll act as your business assistant. Just ask me anything! 💼)`;
+              if (lang === 'hindi') {
+                completionMsg = `🎉 शानदार, ${userName}! आपकी business profile तैयार है!\n\nअब मैं आपके लिए एक personal business assistant की तरह काम करूँगा। clients, invoices, meetings को track करने में मदद दूँगा। बस कुछ भी कहो! 💼`;
+              } else if (lang === 'english') {
+                completionMsg = `🎉 Awesome, ${userName}! Your business profile is ready!\n\nNow I'll act as your personal business assistant. I'll help you track clients, invoices, and meetings. Just ask me anything! 💼`;
+              } else {
+                // Hinglish
+                completionMsg = `🎉 Awesome, ${userName}! Aapka business profile ready ho gaya!\n\nAb main aapka personal business assistant hoon. Clients, invoices, meetings ko track karunga. Bas kuch bhi bolna! 💼`;
+              }
             } else {
-              completionMsg = `🎉 शानदार, ${userName}! तुम्हारा profile तैयार है!\n\nअब मैं तुम्हारे goals, reminders, और daily routine को manage करने में मदद दूँगा। बस कहो कि तुम क्या चाहते हो! 🚀\n\n(Awesome, ${userName}! Your profile is ready! Now I'll help manage your goals, reminders, and routine. Just tell me what you need! 🚀)`;
+              if (lang === 'hindi') {
+                completionMsg = `🎉 शानदार, ${userName}! तुम्हारा profile तैयार है!\n\nअब मैं तुम्हारे goals, reminders, और daily routine को manage करने में मदद दूँगा। बस कहो कि तुम क्या चाहते हो! 🚀`;
+              } else if (lang === 'english') {
+                completionMsg = `🎉 Awesome, ${userName}! Your profile is ready!\n\nNow I'll help manage your goals, reminders, and daily routine. Just tell me what you need! 🚀`;
+              } else {
+                // Hinglish
+                completionMsg = `🎉 Awesome, ${userName}! Aapka profile ready ho gaya!\n\nAb main aapke goals, reminders, aur routine ko manage karunga. Bas batao kya chahiye! 🚀`;
+              }
             }
             
             await whatsappService.sendMessage(rawMessage.from, completionMsg);
@@ -180,15 +235,30 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
       reminderService: {
         createReminder: async (entities) => {
           try {
+            // Parse time string to datetime if needed
+            let reminderDateTime = entities.datetime || entities.time;
+            
+            if (typeof reminderDateTime === 'string') {
+              // Parse time string like "09:00", "2:30 PM", "tomorrow 9 AM" etc
+              reminderDateTime = parseTimeToDateTime(reminderDateTime);
+            }
+            
+            // If still not a Date, use tomorrow at specified time
+            if (!(reminderDateTime instanceof Date)) {
+              reminderDateTime = new Date();
+              reminderDateTime.setDate(reminderDateTime.getDate() + 1);
+              reminderDateTime.setHours(9, 0, 0, 0);
+            }
+            
             const reminder = await ReminderService.createReminder(user._id, {
-              activity: entities.activity || 'Event',
-              title: entities.activity || 'Event',
-              datetime: entities.datetime || new Date(),
+              activity: entities.activity || 'Reminder',
+              title: entities.activity || 'Reminder',
+              datetime: reminderDateTime,
               repeat: entities.repeat || 'none',
               priority: entities.priority || 'medium',
               description: entities.description
             });
-            logger.info('Reminder created:', { reminderId: reminder._id });
+            logger.info('Reminder created:', { reminderId: reminder._id, time: reminderDateTime });
             return { success: true, data: reminder };
           } catch (error) {
             logger.error('Failed to create reminder:', error.message);
@@ -291,10 +361,12 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
         ...context.context,
         userProfile: {
           name: user.name,
+          userType: user.userType,
           dailyActivities: user.dailyActivities,
           hobbies: user.hobbies,
           workSchedule: user.workSchedule,
-          reminderPreferences: user.reminderPreferences
+          reminderPreferences: user.reminderPreferences,
+          businessProfile: user.businessProfile
         }
       };
 
