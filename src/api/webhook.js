@@ -137,8 +137,22 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
     await user.save();
 
     // ============ ONBOARDING FLOW ============
-    if (!user.onboardingCompleted) {
-      logger.info('User is in onboarding:', { userId: user._id, step: user.onboardingStep });
+    if (user.onboardingCompleted) {
+      // 🟢 Onboarding is complete - skip to normal message processing
+      logger.warn('⏭️  SKIPPING ONBOARDING (Already Complete):', {
+        userId: user._id,
+        onboardingStep: user.onboardingStep,
+        userType: user.userType
+      });
+    } else {
+      // ============ ONBOARDING PROCESSING ============
+      logger.warn('📝 ONBOARDING FLOW ENTERED:', { 
+        userId: user._id, 
+        phone: rawMessage.from,
+        isNewUser,
+        currentStep: user.onboardingStep,
+        currentOnboardingCompleted: user.onboardingCompleted 
+      });
       
       if (isNewUser) {
         // First message - send warm welcome + first question combined in ONE message

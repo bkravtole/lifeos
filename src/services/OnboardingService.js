@@ -407,15 +407,37 @@ class OnboardingService {
       const questions = this.getQuestionsForUserType(user.userType, user.preferredLanguage);
       const currentStep = user.onboardingStep;
 
-      logger.debug('Processing onboarding response:', {
+      logger.warn('🔴 ONBOARDING PROCESSRESPONSE DEBUG:', {
         userId,
+        userResponse: userResponse.substring(0, 50),
         currentStep,
         totalQuestions: questions.length,
-        currentOnboardingStatus: user.onboardingCompleted
+        userType: user.userType,
+        userOnboardingCompletedInDB: user.onboardingCompleted,
+        willBeCompleted: currentStep + 1 >= questions.length
       });
 
+      // 🚨 CRITICAL CHECK: If already complete in DB, don't process again
+      if (user.onboardingCompleted && currentStep >= questions.length) {
+        logger.error('❌ ONBOARDING ALREADY COMPLETE - SHOULD NOT REPROCESS!', {
+          userId,
+          step: currentStep,
+          total: questions.length
+        });
+        return {
+          completed: true,
+          message: 'Your profile is complete!',
+          nextQuestion: null,
+          error: 'ALREADY_COMPLETE'
+        };
+      }
+
       if (currentStep >= questions.length) {
-        logger.info('User already completed onboarding:', { userId });
+        logger.error('❌ CURRENTSTEP >= QUESTIONS LENGTH (SHOULD NOT HAPPEN)', {
+          userId,
+          currentStep,
+          questionsLength: questions.length
+        });
         return {
           completed: true,
           message: 'आपकी प्रोफाइल पूरी हो गई है! 🎉\n\n(Your profile is complete! 🎉)',
@@ -424,6 +446,11 @@ class OnboardingService {
       }
 
       const questionObj = questions[currentStep];
+      logger.debug('📋 Processing Q' + currentStep + ':', {
+        key: questionObj.key,
+        questionPreview: questionObj.question.substring(0, 50)
+      });
+
       const parsedValue = questionObj.parse(userResponse);
 
       // Save response based on key and user type
@@ -441,24 +468,37 @@ class OnboardingService {
       if (willBeCompleted) {
         user.onboardingCompleted = true;
         user.onboardingStep = questions.length; // Cap at max
-        logger.warn('🟢 MARKING ONBOARDING AS COMPLETE:', { 
+        logger.error('🟢🟢🟢 SETTING ONBOARDING COMPLETE NOW 🟢🟢🟢', { 
           userId, 
           userType: user.userType,
-          finalStep: user.onboardingStep
+          finalStep: user.onboardingStep,
+          totalQuestions: questions.length
         });
       }
 
       // 🔴 CRITICAL: Save to database
-      await user.save();
+      const saveResult = await user.save();
+      logger.warn('✅ USER SAVED:', {
+        userId,
+        onboardingCompleted: saveResult.onboardingCompleted,
+        onboardingStep: saveResult.onboardingStep
+      });
       
-      // Verify save worked
+      // Verify save worked IMMEDIATELY
       const verifiedUser = await User.findById(userId);
-      logger.info('✅ Verification after save:', {
+      logger.error('⚠️ VERIFICATION IMMEDIATELY AFTER SAVE:', {
         userId,
         onboardingCompleted: verifiedUser.onboardingCompleted,
         onboardingStep: verifiedUser.onboardingStep,
         expectedCompleted: willBeCompleted
       });
+
+      if (verifiedUser.onboardingCompleted !== willBeCompleted) {
+        logger.error('❌❌❌ SAVE VERIFICATION FAILED! ❌❌❌', {
+          expectedCompleted: willBeCompleted,
+          actualCompleted: verifiedUser.onboardingCompleted
+        });
+      }
 
       // Get next question or completion message
       let nextQuestion = null;
@@ -474,9 +514,10 @@ class OnboardingService {
         nextQuestion
       };
     } catch (error) {
-      logger.error('Failed to process onboarding response:', {
+      logger.error('❌ Failed to process onboarding response:', {
         error: error.message,
-        stack: error.stack
+        stack: error.stack,
+        userId
       });
       return {
         completed: false,
