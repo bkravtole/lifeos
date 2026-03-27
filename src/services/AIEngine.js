@@ -154,19 +154,37 @@ Return ONLY valid JSON:
   }
 
   /**
-   * Generate response based on context
+   * Detect language with priority: English > Hinglish > Hindi
+   * Priority: Whenever in doubt, prefer English
    */
-  // Detect language: English, Hindi (Devanagari), or Hinglish (default to English priority)
   detectLanguage(text) {
-    // If mostly English letters, treat as English
-    if (/^[a-zA-Z0-9 ,.'"?!@#$%^&*()_+\-=;:<>/\\|`~\[\]{}]+$/.test(text)) {
+    if (!text) return 'english';
+    
+    const englishCount = (text.match(/[a-zA-Z]/g) || []).length;
+    const hindiCount = (text.match(/[\u0900-\u097F]/g) || []).length;
+    const totalChars = text.length;
+    
+    // If pure English (no Hindi characters at all)
+    if (hindiCount === 0 && englishCount > 0) {
       return 'english';
     }
-    // If contains Devanagari, treat as Hindi
-    if (/[\u0900-\u097F]+/.test(text)) {
+    
+    // If it's a mix of English and Hindi - prefer English first, then Hinglish
+    if (englishCount > 0 && hindiCount > 0) {
+      // If more English than Hindi, use English
+      if (englishCount >= hindiCount) {
+        return 'english';
+      }
+      // Mix is significant - use Hinglish
+      return 'hinglish';
+    }
+    
+    // If mostly or pure Hindi
+    if (hindiCount > englishCount) {
       return 'hindi';
     }
-    // Otherwise, treat as Hinglish (but reply in English for priority)
+    
+    // Default to English (highest priority)
     return 'english';
   }
 
@@ -256,16 +274,17 @@ Generate a warm, personal response that feels like it's coming from their truste
     } catch (error) {
       logger.error('Response generation failed:', error.message);
       
-      // Fallback response in detected language with personality
+      // Fallback response with language priority: English > Hinglish > Hindi
       const lang = this.detectLanguage(currentUserMessage);
       const userName = userContext?.userProfile?.name || '';
       
       if (lang === 'hindi') {
         return `${userName ? userName + ', ' : ''}रुको! मैं सोच रहा हूँ... 🤔`;
-      } else if (lang === 'english') {
-        return `${userName ? 'Hold on ' + userName + '!' : 'Just a moment!'} I'm thinking... 🤔`;
-      } else {
+      } else if (lang === 'hinglish') {
         return `${userName ? userName + ', ' : ''}ek second! Main soch raha hoon... 🤔`;
+      } else {
+        // English (default/priority)
+        return `${userName ? 'Hold on ' + userName + '!' : 'Just a moment!'} I'm thinking... 🤔`;
       }
     }
   }

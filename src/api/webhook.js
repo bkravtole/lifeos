@@ -153,28 +153,30 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
           const onboardingResult = await OnboardingService.processResponse(user._id, processedMessage.text);
           
           if (onboardingResult.completed) {
-            // Warm completion message based on user type AND language
+            // Warm completion message based on user type AND language priority
             const userName = user.name || 'Friend';
             const lang = aiEngine.detectLanguage(processedMessage.text);
             
             let completionMsg = '';
             if (user.userType === 'business') {
+              // Priority: English > Hinglish > Hindi
               if (lang === 'hindi') {
                 completionMsg = `🎉 शानदार, ${userName}! आपकी business profile तैयार है!\n\nअब मैं आपके लिए एक personal business assistant की तरह काम करूँगा। clients, invoices, meetings को track करने में मदद दूँगा। बस कुछ भी कहो! 💼`;
-              } else if (lang === 'english') {
-                completionMsg = `🎉 Awesome, ${userName}! Your business profile is ready!\n\nNow I'll act as your personal business assistant. I'll help you track clients, invoices, and meetings. Just ask me anything! 💼`;
-              } else {
-                // Hinglish
+              } else if (lang === 'hinglish') {
                 completionMsg = `🎉 Awesome, ${userName}! Aapka business profile ready ho gaya!\n\nAb main aapka personal business assistant hoon. Clients, invoices, meetings ko track karunga. Bas kuch bhi bolna! 💼`;
+              } else {
+                // English (default/priority)
+                completionMsg = `🎉 Awesome, ${userName}! Your business profile is ready!\n\nNow I'll act as your personal business assistant. I'll help you track clients, invoices, and meetings. Just ask me anything! 💼`;
               }
             } else {
+              // Priority: English > Hinglish > Hindi
               if (lang === 'hindi') {
                 completionMsg = `🎉 शानदार, ${userName}! तुम्हारा profile तैयार है!\n\nअब मैं तुम्हारे goals, reminders, और daily routine को manage करने में मदद दूँगा। बस कहो कि तुम क्या चाहते हो! 🚀`;
-              } else if (lang === 'english') {
-                completionMsg = `🎉 Awesome, ${userName}! Your profile is ready!\n\nNow I'll help manage your goals, reminders, and daily routine. Just tell me what you need! 🚀`;
-              } else {
-                // Hinglish
+              } else if (lang === 'hinglish') {
                 completionMsg = `🎉 Awesome, ${userName}! Aapka profile ready ho gaya!\n\nAb main aapke goals, reminders, aur routine ko manage karunga. Bas batao kya chahiye! 🚀`;
+              } else {
+                // English (default/priority)
+                completionMsg = `🎉 Awesome, ${userName}! Your profile is ready!\n\nNow I'll help manage your goals, reminders, and daily routine. Just tell me what you need! 🚀`;
               }
             }
             
