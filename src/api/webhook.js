@@ -10,6 +10,7 @@ import RoutineService from '../services/RoutineService.js';
 import ActivityService from '../services/ActivityService.js';
 import User from '../models/User.js';
 import logger from '../utils/logger.js';
+import { connectDB } from '../utils/database.js';
 
 const router = express.Router();
 let aiEngine, whatsappService;
@@ -42,6 +43,7 @@ router.get('/ping', (req, res) => {
  */
 router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
   try {
+    await connectDB();
     if (!aiEngine || !whatsappService) {
       return res.status(503).json({ error: 'Services not initialized' });
     }
