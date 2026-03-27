@@ -1,13 +1,13 @@
 import app from './app.js';
 import { connectDB } from './utils/database.js';
-import SchedulerService from './services/SchedulerService.js';
+import ReminderScheduler from './services/ReminderScheduler.js';
 import logger from './utils/logger.js';
 
 const PORT = process.env.PORT || 3000;
-const scheduler = new SchedulerService();
+const reminderScheduler = new ReminderScheduler();
 
 /**
- * Start server (Local development only)
+ * Start server (Local development + Vercel)
  */
 const startServer = async () => {
   try {
@@ -15,9 +15,14 @@ const startServer = async () => {
     await connectDB();
     logger.info('✅ Database connected');
 
-    // Initialize scheduler
-    await scheduler.initialize();
-    logger.info('✅ Scheduler initialized');
+    // Start reminder scheduler for local development
+    // On Vercel, this won't run, but /webhook/trigger-reminders can be called by external cron service
+    if (process.env.NODE_ENV !== 'production') {
+      reminderScheduler.start();
+      logger.info('✅ Reminder scheduler started (local mode)');
+    } else {
+      logger.info('ℹ️ Running in production mode - use external cron service to call /webhook/trigger-reminders');
+    }
 
     // Start Express server
     app.listen(PORT, process.env.HOST || 'localhost', () => {
@@ -33,13 +38,13 @@ const startServer = async () => {
 // Handle graceful shutdown
 process.on('SIGINT', async () => {
   logger.info('Shutting down gracefully...');
-  scheduler.stopAll();
+  reminderScheduler.stop();
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
   logger.info('Shutting down gracefully...');
-  scheduler.stopAll();
+  reminderScheduler.stop();
   process.exit(0);
 });
 

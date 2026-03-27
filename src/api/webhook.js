@@ -30,38 +30,113 @@ try {
  * Parse time string to DateTime
  * Handles formats like "09:00", "9 AM", "2:30 PM", "tomorrow 3 PM", etc.
  */
+/**
+ * Parse time string to DateTime
+ * Handles: "14:30", "2:30 PM", "00:15 AM", "tomorrow 9 AM", "9 AM today", etc.
+ * 
+ * @param {string} timeStr - Time input string
+ * @returns {Date|null} - Parsed datetime or null if invalid
+ */
 function parseTimeToDateTime(timeStr) {
   if (!timeStr || typeof timeStr !== 'string') {
+    logger.debug('Invalid time string:', timeStr);
     return null;
   }
 
-  const now = new Date();
-  let targetDate = new Date(now);
-  let hour = 9, minute = 0; // default to 9 AM
-
-  const lowerStr = timeStr.toLowerCase().trim();
-
-  // Parse hour and minute
-  const timeMatch = lowerStr.match(/(\d{1,2}):?(\d{2})?\s*(am|pm)?/i);
-  if (timeMatch) {
-    hour = parseInt(timeMatch[1]);
-    minute = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+  try {
+    const now = new Date();
+    let targetDate = new Date(now);
+    let hour = null;
+    let minute = 0;
     
-    // Handle AM/PM
-    if (timeMatch[3]) {
-      const ampm = timeMatch[3].toLowerCase();
-      if (ampm === 'pm' && hour < 12) hour += 12;
-      if (ampm === 'am' && hour === 12) hour = 0;
+    const lowerStr = timeStr.toLowerCase().trim();
+    
+    logger.debug('Parsing time string:', { input: timeStr, lower: lowerStr });
+
+    // Extract time (handles "14:30", "14 30", "2:30", "00:15", etc)
+    // Regex: \d{1,2} (1-2 digits) then optional [:/ ] then optional \d{2}
+    const timeMatch = lowerStr.match(/(\d{1,2})\s*[:./]?\s*(\d{2})?\s*(am|pm|a\.m|p\.m)?/i);
+    
+    if (timeMatch) {
+      hour = parseInt(timeMatch[1]);
+      minute = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+      
+      logger.debug('Extracted time:', { hour, minute, ampm: timeMatch[3] });
+
+      // Handle AM/PM conversion
+      if (timeMatch[3]) {
+        const ampm = timeMatch[3].toLowerCase().replace('.', '');
+        if (ampm === 'pm' && hour < 12) {
+          hour += 12;
+          logger.debug(`Converted ${hour - 12} PM to ${hour}`);
+        }
+        if (ampm === 'am' && hour === 12) {
+          hour = 0;
+          logger.debug('Converted 12 AM to 00');
+        }
+      }
+
+      // Validate hour/minute
+      if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+        logger.warn('Invalid hour/minute:', { hour, minute });
+        return null;
+      }
     }
-  }
 
-  // Check for "tomorrow", "next day", "day after" etc
-  if (lowerStr.includes('tomorrow') || lowerStr.includes('कल') || lowerStr.includes('agle din')) {
-    targetDate.setDate(targetDate.getDate() + 1);
-  }
+    // If no time found, use default
+    if (hour === null) {
+      logger.warn('No time found in string, using default 9 AM');
+      hour = 9;
+      minute = 0;
+    }
 
-  targetDate.setHours(hour, minute, 0, 0);
-  return targetDate;
+    // Determine target date
+    if (lowerStr.includes('tomorrow') || lowerStr.includes('कल') || lowerStr.includes('agle din')) {
+      targetDate.setDate(targetDate.getDate() + 1);
+      logger.debug('Set to tomorrow');
+    } else if (lowerStr.includes('today') || lowerStr.includes('आज') || lowerStr.includes('aaj')) {
+      // Today - check if time has already passed
+      targetDate = new Date(now);
+      const proposedTime = new Date(now);
+      proposedTime.setHours(hour, minute, 0, 0);
+      
+      if (proposedTime <= now) {
+        // Time has passed today, move to tomorrow
+        targetDate.setDate(targetDate.getDate() + 1);
+        logger.debug('Time passed today, moved to tomorrow');
+      } else {
+        logger.debug('Time is still today');
+      }
+    } else {
+      // Default: if time is in the future today, use today; otherwise tomorrow
+      const proposedTime = new Date(now);
+      proposedTime.setHours(hour, minute, 0, 0);
+      
+      if (proposedTime > now) {
+        targetDate = new Date(now);
+        logger.debug('Future time today');
+      } else {
+        targetDate.setDate(targetDate.getDate() + 1);
+        logger.debug('Time in past, moved to tomorrow');
+      }
+    }
+
+    // Set the time
+    targetDate.setHours(hour, minute, 0, 0);
+    
+    logger.info('✅ Time parsed successfully:', {
+      input: timeStr,
+      parsed: targetDate.toISOString(),
+      hour,
+      minute,
+      now: now.toISOString()
+    });
+
+    return targetDate;
+  } catch (error) {
+    logger.error('Error parsing time:', { error: error.message, input: timeStr });
+    return null;
+  }
 }
 
 
@@ -77,6 +152,32 @@ router.get('/ping', (req, res) => {
     message: 'Webhook endpoint is accessible',
     timestamp: new Date().toISOString()
   });
+});
+
+/**
+ * POST /webhook/trigger-reminders
+ * Manual endpoint to trigger reminder checks (for external cron services)
+ * Can be called by services like EasyCron to check reminders on a schedule
+ */
+router.post('/trigger-reminders', async (req, res) => {
+  try {
+    await connectDB();
+    
+    logger.info('🔔 Manual reminder check triggered via webhook');
+    await onDemandScheduler.checkAndSendAllDueReminders();
+    
+    res.status(200).json({
+      success: true,
+      message: 'Reminder check triggered',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Failed to trigger reminder check:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
 });
 
 /**

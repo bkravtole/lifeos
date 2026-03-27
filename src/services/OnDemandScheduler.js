@@ -17,28 +17,93 @@ export class OnDemandScheduler {
   }
 
   /**
-   * Check for due reminders (called during webhook processing)
-   * Prevents hammering DB by only checking once per minute per user
+   * Check and send ALL due reminders (can be called from webhook or external cron)
+   */
+  async checkAndSendAllDueReminders() {
+    try {
+      const now = Date.now();
+      this.lastCheckTime.global = now;
+
+      const reminders = await ReminderService.getReminders();
+      
+      logger.info(`🔔 On-demand check: ${reminders.length} reminders found`, {
+        checkTime: new Date().toISOString()
+      });
+
+      let sentCount = 0;
+
+      for (const reminder of reminders) {
+        try {
+          const shouldSend = this._shouldSendReminder(reminder);
+          
+          logger.debug('Reminder evaluation:', {
+            reminderId: reminder._id,
+            title: reminder.title,
+            shouldSend
+          });
+
+          if (shouldSend) {
+            const userPhone = reminder.userId?.phone;
+            
+            if (!userPhone) {
+              logger.error('Reminder has no phone:', { reminderId: reminder._id });
+              continue;
+            }
+            
+            logger.info('🚀 SENDING REMINDER:', {
+              reminderId: reminder._id,
+              title: reminder.title,
+              to: userPhone
+            });
+
+            await this.whatsappService.sendMessage(
+              userPhone,
+              `⏰ ${reminder.title}\n\n${reminder.description || ''}`
+            );
+
+            await ReminderService.markNotified(reminder._id);
+            sentCount++;
+
+            logger.info('✅ Reminder sent:', {
+              reminderId: reminder._id,
+              phone: userPhone,
+              sentAt: new Date().toISOString()
+            });
+          }
+        } catch (error) {
+          logger.error('Failed to send reminder:', {
+            reminderId: reminder._id,
+            error: error.message
+          });
+        }
+      }
+
+      logger.info(`📊 On-demand check complete: ${sentCount}/${reminders.length} sent`);
+    } catch (error) {
+      logger.error('On-demand check failed:', error.message, error.stack);
+    }
+  }
+
+  /**
+   * Check for due reminders for specific user (called during webhook)
+   * Replacement for deprecated checkAndSendDueReminders
    */
   async checkAndSendDueReminders(userId) {
     try {
       const now = Date.now();
       const lastCheck = this.lastCheckTime[userId] || 0;
       
-      // Check every time (removed throttling - can throttle at webhook level if needed)
       this.lastCheckTime[userId] = now;
 
       const reminders = await ReminderService.getReminders();
       
-      // Filter for this user
       const userReminders = reminders.filter(r => {
         if (!r.userId) return false;
         return r.userId._id.toString() === userId.toString();
       });
       
-      logger.info(`📋 Checking ${userReminders.length} reminders for user ${userId}`, {
+      logger.debug(`📋 User reminder check: ${userReminders.length} reminders`, {
         userId,
-        reminderCount: userReminders.length,
         checkTime: new Date().toISOString()
       });
 
@@ -46,56 +111,36 @@ export class OnDemandScheduler {
         try {
           const shouldSend = this._shouldSendReminder(reminder);
           
-          logger.debug('Reminder check:', {
-            reminderId: reminder._id,
-            title: reminder.title,
-            reminderTime: reminder.datetime,
-            currentTime: new Date().toISOString(),
-            shouldSend,
-            notified: reminder.notified,
-            status: reminder.status
-          });
-
           if (shouldSend) {
             const userPhone = reminder.userId?.phone;
             
             if (!userPhone) {
-              logger.error('Reminder has no user phone:', { reminderId: reminder._id });
+              logger.error('Reminder missing phone:', { reminderId: reminder._id });
               continue;
             }
             
-            logger.info('🔔 Sending reminder:', {
-              reminderId: reminder._id,
-              title: reminder.title,
-              to: userPhone
-            });
-
-            // Send WhatsApp reminder
             await this.whatsappService.sendMessage(
               userPhone,
               `⏰ ${reminder.title}\n\n${reminder.description || ''}`
             );
 
-            // Mark as notified
             await ReminderService.markNotified(reminder._id);
 
-            logger.info('✅ Reminder sent successfully:', {
+            logger.info('✅ User reminder sent:', {
               reminderId: reminder._id,
-              phone: userPhone,
-              title: reminder.title,
+              userId,
               sentAt: new Date().toISOString()
             });
           }
         } catch (error) {
-          logger.error('Failed to send reminder:', {
+          logger.error('Failed to process user reminder:', {
             reminderId: reminder._id,
-            error: error.message,
-            stack: error.stack
+            error: error.message
           });
         }
       }
     } catch (error) {
-      logger.error('Reminder check failed:', error.message, error.stack);
+      logger.error('User reminder check failed:', error.message, error.stack);
     }
   }
 
