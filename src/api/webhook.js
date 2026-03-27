@@ -246,17 +246,21 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
 
 /**
  * GET /webhook/whatsapp
- * WhatsApp webhook verification (11za)
+ * Webhook verification endpoint (for webhook providers that require GET verification)
  */
 router.get('/whatsapp', (req, res) => {
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
+  const webhookSecret = process.env.ELEVENZA_WEBHOOK_SECRET;
 
-  if (token === process.env.WHATSAPP_WEBHOOK_TOKEN) {
-    logger.info('Webhook verified successfully');
-    res.send(challenge);
+  if (webhookSecret && token === webhookSecret) {
+    logger.info('✅ Webhook verified successfully');
+    res.send(challenge || 'verified');
+  } else if (!webhookSecret) {
+    logger.warn('⚠️ ELEVENZA_WEBHOOK_SECRET not configured');
+    res.status(403).send('Webhook secret not configured');
   } else {
-    logger.warn('Invalid webhook verification token');
+    logger.warn('❌ Invalid webhook verification token');
     res.status(403).send('Invalid token');
   }
 });

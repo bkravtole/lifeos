@@ -2,22 +2,34 @@ import logger from '../utils/logger.js';
 
 /**
  * Webhook Signature Verification Middleware
+ * Validates x-api-key header against ELEVENZA_WEBHOOK_SECRET
  */
 export const verifyWebhookSignature = (req, res, next) => {
   try {
-    const signature = req.headers['x-11za-signature'];
-    const token = process.env.WHATSAPP_WEBHOOK_TOKEN;
+    const expectedSecret = process.env.ELEVENZA_WEBHOOK_SECRET;
 
-    // TODO: Implement proper HMAC verification with 11za
-    // For now, basic token check
-    if (!signature || signature !== token) {
-      logger.warn('Invalid webhook signature');
-      return res.status(401).json({ error: 'Unauthorized' });
+    if (expectedSecret) {
+      const incomingToken = req.headers['x-api-key'];
+
+      if (incomingToken !== expectedSecret) {
+        logger.warn('❌ UNAUTHORIZED: Invalid Webhook Request. Headers mismatch.', {
+          received: incomingToken ? 'present' : 'missing',
+          expected: 'present'
+        });
+        // Returning 200 to prevent retries from webhook provider
+        return res.status(200).send('Unauthorized but acknowledged');
+      }
+
+      logger.debug('✅ Webhook signature verified', {
+        source: 'x-api-key header'
+      });
+    } else {
+      logger.warn('⚠️  ELEVENZA_WEBHOOK_SECRET not configured, webhook verification skipped');
     }
 
     next();
   } catch (error) {
-    logger.error('Signature verification failed:', error.message);
+    logger.error('Webhook verification failed:', error.message);
     res.status(500).json({ error: 'Internal server error' });
   }
 };
