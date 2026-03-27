@@ -211,9 +211,6 @@ class OnboardingService {
         }
       }
     ]
-        }
-      }
-    ]
   };
 
   // ==================== HINGLISH QUESTIONS ====================
