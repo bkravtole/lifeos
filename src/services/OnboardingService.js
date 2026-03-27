@@ -149,48 +149,13 @@ class OnboardingService {
       return [...this.baseQuestions, ...this.personalQuestions];
     }
   }
-      parse: (response) => response.toLowerCase().trim()
-    },
-    {
-      step: 2,
-      question: 'आपकी दैनिक गतिविधियाँ क्या हैं? (कृपया अल्पविराम से अलग करें: जैम, ध्यान, काम, आदि)\n\n(What are your daily activities? Please separate with commas: gym, meditation, work, etc.)',
-      key: 'dailyActivities',
-      parse: (response) => response.split(',').map(item => item.trim()).filter(item => item)
-    },
-    {
-      step: 3,
-      question: 'आपके शौक क्या हैं? (कृपया अल्पविराम से अलग करें: पढ़ना, कोडिंग, खेल, आदि)\n\n(What are your hobbies? Please separate with commas: reading, coding, sports, etc.)',
-      key: 'hobbies',
-      parse: (response) => response.split(',').map(item => item.trim()).filter(item => item)
-    },
-    {
-      step: 4,
-      question: 'आपका कार्य समय क्या है? (शुरुआत समय HH:MM प्रारूप में, उदाहरण: 09:00)\n\n(What is your work start time? In HH:MM format, e.g., 09:00)',
-      key: 'workStartTime',
-      parse: (response) => response.trim()
-    },
-    {
-      step: 5,
-      question: 'आपका कार्य समाप्ति समय क्या है? (HH:MM प्रारूप में, उदाहरण: 18:00)\n\n(What is your work end time? In HH:MM format, e.g., 18:00)',
-      key: 'workEndTime',
-      parse: (response) => response.trim()
-    },
-    {
-      step: 6,
-      question: 'क्या आप रिमाइंडर प्राप्त करना चाहते हैं? (हाँ/नहीं)\n\n(Do you want to receive reminders? Yes/No)',
-      key: 'enableReminders',
-      parse: (response) => {
-        const ans = response.toLowerCase().trim();
-        return ans.includes('yes') || ans.includes('हा') || ans.includes('हाँ') || ans.includes('yes');
-      }
-    },
-    {
-      step: 7,
-      question: 'आप किस समय रिमाइंडर पाना पसंद करेंगे? (HH:MM प्रारूप में, उदाहरण: 08:00)\n\n(What time would you prefer reminders? In HH:MM format, e.g., 08:00)',
-      key: 'reminderTime',
-      parse: (response) => response.trim()
-    }
-  ];
+
+  /**
+   * Get first question for new user
+   */
+  static getFirstQuestion() {
+    return this.baseQuestions[0].question;
+  }
 
   /**
    * Get current onboarding question for a user
