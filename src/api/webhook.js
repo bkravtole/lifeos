@@ -248,21 +248,61 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
  * GET /webhook/whatsapp
  * Webhook verification endpoint (for webhook providers that require GET verification)
  */
+/**
+ * GET /webhook/whatsapp
+ * Webhook verification endpoint
+ */
 router.get('/whatsapp', (req, res) => {
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
   const webhookSecret = process.env.ELEVENZA_WEBHOOK_SECRET;
+
+  logger.debug('Webhook verification attempt', { hasToken: !!token, hasChallenge: !!challenge });
 
   if (webhookSecret && token === webhookSecret) {
     logger.info('✅ Webhook verified successfully');
     res.send(challenge || 'verified');
   } else if (!webhookSecret) {
     logger.warn('⚠️ ELEVENZA_WEBHOOK_SECRET not configured');
-    res.status(403).send('Webhook secret not configured');
+    res.status(200).send('OK');
   } else {
     logger.warn('❌ Invalid webhook verification token');
-    res.status(403).send('Invalid token');
+    res.status(200).send('OK');
   }
+});
+
+/**
+ * GET /webhook/test
+ * Test endpoint to verify webhook URL is accessible
+ */
+router.get('/test', (req, res) => {
+  logger.info('🧪 TEST GET ENDPOINT - Webhook URL is accessible');
+  res.status(200).json({
+    status: 'success',
+    message: 'Webhook URL is working',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV,
+    webhookSecret: process.env.ELEVENZA_WEBHOOK_SECRET ? '✅ Configured' : '❌ Not configured'
+  });
+});
+
+/**
+ * POST /webhook/test
+ * Test POST endpoint for webhook testing
+ */
+router.post('/test', (req, res) => {
+  logger.info('🧪 TEST POST ENDPOINT HIT', {
+    hasApiKey: !!req.headers['x-api-key'],
+    hasBody: !!req.body,
+    bodyKeys: req.body ? Object.keys(req.body) : []
+  });
+  res.status(200).json({
+    status: 'received',
+    message: 'Test webhook POST received',
+    receivedAt: new Date().toISOString(),
+    apiKeyValid: req.headers['x-api-key'] === process.env.ELEVENZA_WEBHOOK_SECRET,
+    headers: req.headers
+  });
 });
 
 export default router;
