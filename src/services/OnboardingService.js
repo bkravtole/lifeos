@@ -100,41 +100,11 @@ class OnboardingService {
       },
       {
         step: 7,
-        question: 'What time does your business open? (HH:MM, e.g., 09:00)',
-        key: 'businessStartTime',
-        parse: (response) => response.trim()
-      },
-      {
-        step: 8,
-        question: 'What time do you close? (HH:MM, e.g., 18:00)',
-        key: 'businessEndTime',
-        parse: (response) => response.trim()
-      },
-      {
-        step: 9,
-        question: '🎯 What services/products do you offer? (comma separated)',
-        key: 'services',
-        parse: (response) => response.split(',').map(item => item.trim()).filter(item => item)
-      },
-      {
-        step: 10,
-        question: 'How many people in your team? 👥',
-        key: 'numberOfEmployees',
-        parse: (response) => parseInt(response.trim()) || 0
-      },
-      {
-        step: 11,
-        question: '💰 What\'s your monthly revenue target?',
-        key: 'monthlyTarget',
-        parse: (response) => parseInt(response.trim().replace(/[^0-9]/g, '')) || 0
-      },
-      {
-        step: 12,
-        question: '🎉 Can I help you track clients, invoices, meetings, and leads? (Yes/No)',
+        question: 'Can I help track clients, invoices, and meetings? (Yes/No)',
         key: 'enableBusinessFeatures',
         parse: (response) => {
           const ans = response.toLowerCase().trim();
-          return ans.includes('yes') || ans.includes('y');
+          return ans.includes('yes') || ans.includes('y') || ans.includes('haa') || ans.includes('hn');
         }
       }
     ]
@@ -233,41 +203,14 @@ class OnboardingService {
       },
       {
         step: 7,
-        question: 'आपका व्यवसाय कब खुलता है? (समय HH:MM में, जैसे: 09:00)',
-        key: 'businessStartTime',
-        parse: (response) => response.trim()
-      },
-      {
-        step: 8,
-        question: 'कितने बजे बंद करते हो? (HH:MM, जैसे: 18:00)',
-        key: 'businessEndTime',
-        parse: (response) => response.trim()
-      },
-      {
-        step: 9,
-        question: '🎯 आप कौन सी सेवाएं/उत्पाद प्रदान करते हैं? (अल्पविराम से अलग करें)',
-        key: 'services',
-        parse: (response) => response.split(',').map(item => item.trim()).filter(item => item)
-      },
-      {
-        step: 10,
-        question: 'आपकी टीम में कितने लोग हैं? 👥',
-        key: 'numberOfEmployees',
-        parse: (response) => parseInt(response.trim()) || 0
-      },
-      {
-        step: 11,
-        question: '💰 आपका महीने का राजस्व लक्ष्य क्या है?',
-        key: 'monthlyTarget',
-        parse: (response) => parseInt(response.trim().replace(/[^0-9]/g, '')) || 0
-      },
-      {
-        step: 12,
-        question: '🎉 क्या मैं आपको clients, invoices, meetings, और leads track करने में मदद कर सकता हूँ? (हाँ/नहीं)',
+        question: '🎉 क्या मैं आपको clients, invoices, meetings को track करने में मदद कर सकता हूँ? (हाँ/नहीं)',
         key: 'enableBusinessFeatures',
         parse: (response) => {
           const ans = response.toLowerCase().trim();
           return ans.includes('yes') || ans.includes('हा') || ans.includes('हाँ') || ans.includes('जी');
+        }
+      }
+    ]
         }
       }
     ]
@@ -366,37 +309,7 @@ class OnboardingService {
       },
       {
         step: 7,
-        question: 'Aapka business kab kholte ho? (time HH:MM mein, jaise 09:00)',
-        key: 'businessStartTime',
-        parse: (response) => response.trim()
-      },
-      {
-        step: 8,
-        question: 'Kab band karte ho? (HH:MM, jaise 18:00)',
-        key: 'businessEndTime',
-        parse: (response) => response.trim()
-      },
-      {
-        step: 9,
-        question: '🎯 Aap kaun si services/products dete ho? (comma se alag karo)',
-        key: 'services',
-        parse: (response) => response.split(',').map(item => item.trim()).filter(item => item)
-      },
-      {
-        step: 10,
-        question: 'Aapki team mein kitne log hain? 👥',
-        key: 'numberOfEmployees',
-        parse: (response) => parseInt(response.trim()) || 0
-      },
-      {
-        step: 11,
-        question: '💰 Aapka monthly revenue target kya hai?',
-        key: 'monthlyTarget',
-        parse: (response) => parseInt(response.trim().replace(/[^0-9]/g, '')) || 0
-      },
-      {
-        step: 12,
-        question: '🎉 Kya main aapko clients, invoices, meetings aur leads track karne mein madad kar sakta hoon? (Yes/No)',
+        question: '🎉 Kya main aapko clients, invoices, meetings track karne mein madad kar sakta hoon? (Yes/No)',
         key: 'enableBusinessFeatures',
         parse: (response) => {
           const ans = response.toLowerCase().trim();
