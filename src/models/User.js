@@ -35,8 +35,19 @@ const userSchema = new mongoose.Schema(
       default: 'english'
     },
 
-    // User Profile Info (Personal)
+    // HLD Profile Info (according to High Level Design)
+    wakeUpTime: String, // e.g., "06:00" (wake-up time)
+    sleepTime: String, // e.g., "22:00" (sleep time)
     dailyActivities: [String], // e.g., ["gym", "meditation", "work"]
+    routines: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Routine'
+      }
+    ],
+
+    // User Profile Info (Personal)
+    // dailyActivities: [String], // e.g., ["gym", "meditation", "work"]
     hobbies: [String], // e.g., ["reading", "coding", "sports"]
     workSchedule: {
       startTime: String, // e.g., "09:00"

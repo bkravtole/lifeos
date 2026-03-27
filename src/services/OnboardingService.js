@@ -2,394 +2,278 @@ import User from '../models/User.js';
 import logger from '../utils/logger.js';
 
 /**
- * Onboarding Service
- * Handles user onboarding flow - collects user info and preferences
- * Language-aware: supports English, Hindi, and Hinglish
+ * Simplified Onboarding Service (HLD Aligned)
+ * 
+ * Flow (according to High Level Design):
+ * 1. Name?
+ * 2. Wake-up time?
+ * 3. Sleep time?
+ * 4. Daily activities?
+ * 5. Reminder preference?
  */
 class OnboardingService {
-  // ==================== ENGLISH QUESTIONS ====================
-  static englishQuestions = {
-    base: [
-      {
-        step: 0,
-        question: '👋 Hey! I\'m your LifeOS assistant. What\'s your name?',
-        key: 'name',
-        parse: (response) => response.trim()
-      },
-      {
-        step: 1,
-        question: '😊 Great! Can you share your email?',
-        key: 'email',
-        parse: (response) => response.toLowerCase().trim()
-      },
-      {
-        step: 2,
-        question: 'Do you run a business or are an entrepreneur? (Yes/No)',
-        key: 'userType',
-        parse: (response) => {
-          const ans = response.toLowerCase().trim();
-          return (ans.includes('yes') || ans.includes('y')) ? 'business' : 'personal';
-        }
-      }
-    ],
-    personal: [
-      {
-        step: 3,
-        question: 'What are your daily activities? (e.g., gym, meditation, work, reading)',
-        key: 'dailyActivities',
-        parse: (response) => response.split(',').map(item => item.trim()).filter(item => item)
-      },
-      {
-        step: 4,
-        question: '🎯 What are your hobbies?',
-        key: 'hobbies',
-        parse: (response) => response.split(',').map(item => item.trim()).filter(item => item)
-      },
-      {
-        step: 5,
-        question: 'What time do you start work? (HH:MM, e.g., 09:00)',
-        key: 'workStartTime',
-        parse: (response) => response.trim()
-      },
-      {
-        step: 6,
-        question: 'What time do you finish? (HH:MM, e.g., 18:00)',
-        key: 'workEndTime',
-        parse: (response) => response.trim()
-      },
-      {
-        step: 7,
-        question: 'Can I send you reminders? (Yes/No)',
-        key: 'enableReminders',
-        parse: (response) => {
-          const ans = response.toLowerCase().trim();
-          return ans.includes('yes') || ans.includes('y');
-        }
-      },
-      {
-        step: 8,
-        question: 'What time should I remind you? (HH:MM, e.g., 08:00)',
-        key: 'reminderTime',
-        parse: (response) => response.trim()
-      }
-    ],
-    business: [
-      {
-        step: 3,
-        question: '🚀 What\'s your company name?',
-        key: 'businessName',
-        parse: (response) => response.trim()
-      },
-      {
-        step: 4,
-        question: 'What kind of business? (e.g., consulting, e-commerce, services)',
-        key: 'businessType',
-        parse: (response) => response.trim()
-      },
-      {
-        step: 5,
-        question: 'Tell me briefly what you do? (1-2 lines)',
-        key: 'businessDescription',
-        parse: (response) => response.trim()
-      },
-      {
-        step: 6,
-        question: '📧 What\'s your business email?',
-        key: 'businessEmail',
-        parse: (response) => response.toLowerCase().trim()
-      },
-      {
-        step: 7,
-        question: 'Can I help track clients, invoices, and meetings? (Yes/No)',
-        key: 'enableBusinessFeatures',
-        parse: (response) => {
-          const ans = response.toLowerCase().trim();
-          return ans.includes('yes') || ans.includes('y') || ans.includes('haa') || ans.includes('hn');
-        }
-      }
-    ]
-  };
-
-  // ==================== HINDI QUESTIONS ====================
-  static hindiQuestions = {
-    base: [
-      {
-        step: 0,
-        question: '👋 नमस्ते! मैं आपकी LifeOS सहायक हूँ। आपका नाम क्या है?',
-        key: 'name',
-        parse: (response) => response.trim()
-      },
-      {
-        step: 1,
-        question: '😊 बहुत अच्छा! आपका ईमेल पता क्या है?',
-        key: 'email',
-        parse: (response) => response.toLowerCase().trim()
-      },
-      {
-        step: 2,
-        question: 'क्या आप कोई व्यवसाय चलाते हैं या entrepreneur हैं? (हाँ/नहीं)',
-        key: 'userType',
-        parse: (response) => {
-          const ans = response.toLowerCase().trim();
-          return (ans.includes('yes') || ans.includes('हा') || ans.includes('हाँ') || ans.includes('जी')) ? 'business' : 'personal';
-        }
-      }
-    ],
-    personal: [
-      {
-        step: 3,
-        question: 'आपकी दैनिक गतिविधियाँ क्या हैं? (जैसे: जिम, ध्यान, काम, पढ़ना)',
-        key: 'dailyActivities',
-        parse: (response) => response.split(',').map(item => item.trim()).filter(item => item)
-      },
-      {
-        step: 4,
-        question: '🎯 आपके शौक क्या हैं?',
-        key: 'hobbies',
-        parse: (response) => response.split(',').map(item => item.trim()).filter(item => item)
-      },
-      {
-        step: 5,
-        question: 'सुबह कितने बजे काम शुरू करते हो? (HH:MM, जैसे: 09:00)',
-        key: 'workStartTime',
-        parse: (response) => response.trim()
-      },
-      {
-        step: 6,
-        question: 'और कितने बजे खत्म करते हो? (HH:MM, जैसे: 18:00)',
-        key: 'workEndTime',
-        parse: (response) => response.trim()
-      },
-      {
-        step: 7,
-        question: 'क्या मैं तुम्हें रिमाइंडर दे सकता हूँ? (हाँ/नहीं)',
-        key: 'enableReminders',
-        parse: (response) => {
-          const ans = response.toLowerCase().trim();
-          return ans.includes('yes') || ans.includes('हा') || ans.includes('हाँ') || ans.includes('जी');
-        }
-      },
-      {
-        step: 8,
-        question: '🎉 किस समय सुबह मैं तुम्हें याद दिलाऊँ? (HH:MM, जैसे: 08:00)',
-        key: 'reminderTime',
-        parse: (response) => response.trim()
-      }
-    ],
-    business: [
-      {
-        step: 3,
-        question: '🚀 आपकी कंपनी का नाम क्या है?',
-        key: 'businessName',
-        parse: (response) => response.trim()
-      },
-      {
-        step: 4,
-        question: 'आपका व्यवसाय किस प्रकार का है? (जैसे: consulting, e-commerce, सेवा)',
-        key: 'businessType',
-        parse: (response) => response.trim()
-      },
-      {
-        step: 5,
-        question: 'संक्षिप्त विवरण दें कि आप क्या करते हैं? (1-2 लाइन)',
-        key: 'businessDescription',
-        parse: (response) => response.trim()
-      },
-      {
-        step: 6,
-        question: '📧 आपके व्यवसाय का ईमेल पता क्या है?',
-        key: 'businessEmail',
-        parse: (response) => response.toLowerCase().trim()
-      },
-      {
-        step: 7,
-        question: '🎉 क्या मैं आपको clients, invoices, meetings को track करने में मदद कर सकता हूँ? (हाँ/नहीं)',
-        key: 'enableBusinessFeatures',
-        parse: (response) => {
-          const ans = response.toLowerCase().trim();
-          return ans.includes('yes') || ans.includes('हा') || ans.includes('हाँ') || ans.includes('जी');
-        }
-      }
-    ]
-  };
-
-  // ==================== HINGLISH QUESTIONS ====================
-  static hinglishQuestions = {
-    base: [
-      {
-        step: 0,
-        question: '👋 Hey! Mera naam LifeOS AI assistant hai. Aapka naam kya hai?',
-        key: 'name',
-        parse: (response) => response.trim()
-      },
-      {
-        step: 1,
-        question: '😊 Shukriya! Aapka email de sakte ho?',
-        key: 'email',
-        parse: (response) => response.toLowerCase().trim()
-      },
-      {
-        step: 2,
-        question: 'Kya aap koi business chalate ho ya entrepreneur ho? (Yes/No)',
-        key: 'userType',
-        parse: (response) => {
-          const ans = response.toLowerCase().trim();
-          return (ans.includes('yes') || ans.includes('y') || ans.includes('haa') || ans.includes('हा')) ? 'business' : 'personal';
-        }
-      }
-    ],
-    personal: [
-      {
-        step: 3,
-        question: 'Aapki daily activities kya hain? (jaise gym, meditation, work)',
-        key: 'dailyActivities',
-        parse: (response) => response.split(',').map(item => item.trim()).filter(item => item)
-      },
-      {
-        step: 4,
-        question: '🎯 Aapke hobbies kya hain?',
-        key: 'hobbies',
-        parse: (response) => response.split(',').map(item => item.trim()).filter(item => item)
-      },
-      {
-        step: 5,
-        question: 'Subah kab kaam shuru karte ho? (HH:MM, jaise 09:00)',
-        key: 'workStartTime',
-        parse: (response) => response.trim()
-      },
-      {
-        step: 6,
-        question: 'Aur kab khatam karte ho? (HH:MM, jaise 18:00)',
-        key: 'workEndTime',
-        parse: (response) => response.trim()
-      },
-      {
-        step: 7,
-        question: 'Kya main aapko reminders de sakta hoon? (Yes/No)',
-        key: 'enableReminders',
-        parse: (response) => {
-          const ans = response.toLowerCase().trim();
-          return ans.includes('yes') || ans.includes('y') || ans.includes('haa');
-        }
-      },
-      {
-        step: 8,
-        question: '🎉 Kis time subah main aapko yaad dilaunga? (HH:MM, jaise 08:00)',
-        key: 'reminderTime',
-        parse: (response) => response.trim()
-      }
-    ],
-    business: [
-      {
-        step: 3,
-        question: '🚀 Aapki company ka naam kya hai?',
-        key: 'businessName',
-        parse: (response) => response.trim()
-      },
-      {
-        step: 4,
-        question: 'Aapka business kis tarah ka hai? (jaise consulting, e-commerce)',
-        key: 'businessType',
-        parse: (response) => response.trim()
-      },
-      {
-        step: 5,
-        question: 'Batao briefly aap kya karte ho? (1-2 lines)',
-        key: 'businessDescription',
-        parse: (response) => response.trim()
-      },
-      {
-        step: 6,
-        question: '📧 Aapke business ka email kya hai?',
-        key: 'businessEmail',
-        parse: (response) => response.toLowerCase().trim()
-      },
-      {
-        step: 7,
-        question: '🎉 Kya main aapko clients, invoices, meetings track karne mein madad kar sakta hoon? (Yes/No)',
-        key: 'enableBusinessFeatures',
-        parse: (response) => {
-          const ans = response.toLowerCase().trim();
-          return ans.includes('yes') || ans.includes('y') || ans.includes('haa');
-        }
-      }
-    ]
-  };
-
-  /**
-   * Get questions for a specific language and user type
-   */
-  static getQuestionsForUserType(userType, language = 'english') {
-    let questionSet = this.englishQuestions; // default to English
-    
+  // ==================== QUESTIONS ====================
+  
+  static getQuestions(language = 'english') {
     if (language === 'hindi') {
-      questionSet = this.hindiQuestions;
+      return [
+        {
+          step: 0,
+          question: '👋 नमस्ते! मैं आपकी LifeOS सहायक हूँ। आपका नाम क्या है?',
+          key: 'name',
+          parse: (response) => response.trim()
+        },
+        {
+          step: 1,
+          question: '🌅 आप सुबह कितने बजे उठते हो? (HH:MM, जैसे: 06:00)',
+          key: 'wakeUpTime',
+          parse: (response) => response.trim()
+        },
+        {
+          step: 2,
+          question: '🌙 रात को कितने बजे सोते हो? (HH:MM, जैसे: 22:00)',
+          key: 'sleepTime',
+          parse: (response) => response.trim()
+        },
+        {
+          step: 3,
+          question: '📋 आपकी दैनिक गतिविधियाँ क्या हैं? (जैसे: gym, meditation, work - कॉमा से अलग करें)',
+          key: 'dailyActivities',
+          parse: (response) => response.split(',').map(item => item.trim()).filter(item => item)
+        },
+        {
+          step: 4,
+          question: '🔊 क्या मैं आपको रिमाइंडर दे सकता हूँ? (Yes/No)',
+          key: 'enableReminders',
+          parse: (response) => {
+            const ans = response.toLowerCase().trim();
+            return ans.includes('yes') || ans.includes('y') || ans.includes('हा') || ans.includes('हाँ') || ans.includes('जी');
+          }
+        }
+      ];
     } else if (language === 'hinglish') {
-      questionSet = this.hinglishQuestions;
-    }
-    
-    if (userType === 'business') {
-      return [...questionSet.base, ...questionSet.business];
+      return [
+        {
+          step: 0,
+          question: '👋 Namaste! Main aapka LifeOS assistant hoon. Aapka naam kya hai?',
+          key: 'name',
+          parse: (response) => response.trim()
+        },
+        {
+          step: 1,
+          question: '🌅 Aap subah kab uthte ho? (HH:MM, jaise: 06:00)',
+          key: 'wakeUpTime',
+          parse: (response) => response.trim()
+        },
+        {
+          step: 2,
+          question: '🌙 Raat ko kab sote ho? (HH:MM, jaise: 22:00)',
+          key: 'sleepTime',
+          parse: (response) => response.trim()
+        },
+        {
+          step: 3,
+          question: '📋 Aapki daily activities kya hain? (jaise: gym, meditation, work - comma se alag karein)',
+          key: 'dailyActivities',
+          parse: (response) => response.split(',').map(item => item.trim()).filter(item => item)
+        },
+        {
+          step: 4,
+          question: '🔊 Kya main aapko reminders de sakta hoon? (Yes/No)',
+          key: 'enableReminders',
+          parse: (response) => {
+            const ans = response.toLowerCase().trim();
+            return ans.includes('yes') || ans.includes('y') || ans.includes('haa');
+          }
+        }
+      ];
     } else {
-      return [...questionSet.base, ...questionSet.personal];
+      // English (default)
+      return [
+        {
+          step: 0,
+          question: '👋 Hey! I\'m your LifeOS assistant. What\'s your name?',
+          key: 'name',
+          parse: (response) => response.trim()
+        },
+        {
+          step: 1,
+          question: '🌅 What time do you wake up? (HH:MM, e.g., 06:00)',
+          key: 'wakeUpTime',
+          parse: (response) => response.trim()
+        },
+        {
+          step: 2,
+          question: '🌙 What time do you sleep? (HH:MM, e.g., 22:00)',
+          key: 'sleepTime',
+          parse: (response) => response.trim()
+        },
+        {
+          step: 3,
+          question: '📋 What are your daily activities? (e.g., gym, meditation, work - comma separated)',
+          key: 'dailyActivities',
+          parse: (response) => response.split(',').map(item => item.trim()).filter(item => item)
+        },
+        {
+          step: 4,
+          question: '🔊 Can I send you reminders? (Yes/No)',
+          key: 'enableReminders',
+          parse: (response) => {
+            const ans = response.toLowerCase().trim();
+            return ans.includes('yes') || ans.includes('y');
+          }
+        }
+      ];
     }
   }
 
   /**
-   * Get first question for new user in specified language
+   * Get first question
    */
   static getFirstQuestion(language = 'english') {
-    let questionSet = this.englishQuestions; // default
-    
-    if (language === 'hindi') {
-      questionSet = this.hindiQuestions;
-    } else if (language === 'hinglish') {
-      questionSet = this.hinglishQuestions;
-    }
-    
-    return questionSet.base[0].question;
+    const questions = this.getQuestions(language);
+    return questions[0].question;
   }
 
   /**
-   * Get current onboarding question for a user
+   * Get current question for user
    */
-  static getQuestion(step, userType = 'personal', language = 'english') {
-    const questions = this.getQuestionsForUserType(userType, language);
+  static getQuestion(step, language = 'english') {
+    const questions = this.getQuestions(language);
     const questionObj = questions.find(q => q.step === step);
     return questionObj ? questionObj.question : null;
   }
 
   /**
-   * Get question object by step
+   * Get total steps for onboarding
    */
-  static getQuestionObj(step, userType = 'personal', language = 'english') {
-    const questions = this.getQuestionsForUserType(userType, language);
-    return questions.find(q => q.step === step);
+  static getTotalSteps() {
+    return 5; // 5 questions total
   }
 
   /**
-   * Get onboarding state for user
+   * Process onboarding response
+   */
+  static async processResponse(userId, userResponse) {
+    try {
+      const user = await User.findById(userId);
+      if (!user) {
+        throw new Error('User not found');
+      }
+
+      const currentStep = user.onboardingStep;
+      const language = user.preferredLanguage;
+      const questions = this.getQuestions(language);
+
+      logger.info('📝 Processing onboarding response:', {
+        userId,
+        step: currentStep,
+        totalSteps: questions.length
+      });
+
+      // Already completed
+      if (user.onboardingCompleted) {
+        logger.warn('Onboarding already complete');
+        return {
+          completed: true,
+          message: 'Your profile is already complete!'
+        };
+      }
+
+      // Current step exceeds total
+      if (currentStep >= questions.length) {
+        logger.error('Step exceeds total questions', { currentStep, total: questions.length });
+        return {
+          completed: true,
+          message: 'Onboarding complete!'
+        };
+      }
+
+      // Get current question object
+      const questionObj = questions[currentStep];
+      if (!questionObj) {
+        throw new Error(`Question not found at step ${currentStep}`);
+      }
+
+      // Parse response
+      const parsedValue = questionObj.parse(userResponse);
+
+      // Update user based on key
+      switch (questionObj.key) {
+        case 'name':
+          user.name = parsedValue;
+          break;
+        case 'wakeUpTime':
+          user.wakeUpTime = parsedValue;
+          break;
+        case 'sleepTime':
+          user.sleepTime = parsedValue;
+          break;
+        case 'dailyActivities':
+          user.dailyActivities = parsedValue;
+          break;
+        case 'enableReminders':
+          user.preferences.notificationsEnabled = parsedValue;
+          break;
+      }
+
+      // Move to next step
+      user.onboardingStep = currentStep + 1;
+
+      // Check if onboarding is complete
+      const isComplete = user.onboardingStep >= questions.length;
+      if (isComplete) {
+        user.onboardingCompleted = true;
+        logger.info('✅ Onboarding completed for user:', { userId });
+      }
+
+      // Save to database
+      await user.save();
+
+      // Get next question or return completion
+      let nextQuestion = null;
+      if (!isComplete && user.onboardingStep < questions.length) {
+        nextQuestion = this.getQuestion(user.onboardingStep, language);
+      }
+
+      return {
+        completed: isComplete,
+        step: user.onboardingStep,
+        nextQuestion,
+        userType: user.userType,
+        message: isComplete ? '🎉 Profile setup complete!' : 'ठीक है! आगला सवाल आ रहा है...'
+      };
+
+    } catch (error) {
+      logger.error('Failed to process onboarding response:', error.message);
+      return {
+        completed: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Get onboarding state
    */
   static async getOnboardingState(userId) {
     try {
       const user = await User.findById(userId);
-      const questions = this.getQuestionsForUserType(user.userType, user.preferredLanguage);
-      
+      if (!user) return null;
+
+      const language = user.preferredLanguage;
+      const questions = this.getQuestions(language);
+
       return {
         completed: user.onboardingCompleted,
         step: user.onboardingStep,
-        userType: user.userType,
-        language: user.preferredLanguage,
         totalSteps: questions.length,
         profile: {
           name: user.name,
-          email: user.email,
-          userType: user.userType,
+          wakeUpTime: user.wakeUpTime,
+          sleepTime: user.sleepTime,
           dailyActivities: user.dailyActivities,
-          hobbies: user.hobbies,
-          workSchedule: user.workSchedule,
-          reminderPreferences: user.reminderPreferences,
-          businessProfile: user.businessProfile
+          enableReminders: user.preferences.notificationsEnabled
         }
       };
     } catch (error) {
@@ -399,242 +283,7 @@ class OnboardingService {
   }
 
   /**
-   * Process onboarding response
-   */
-  static async processResponse(userId, userResponse) {
-    try {
-      const user = await User.findById(userId);
-      const questions = this.getQuestionsForUserType(user.userType, user.preferredLanguage);
-      const currentStep = user.onboardingStep;
-
-      logger.warn('🔴 ONBOARDING PROCESSRESPONSE DEBUG:', {
-        userId,
-        userResponse: userResponse.substring(0, 50),
-        currentStep,
-        totalQuestions: questions.length,
-        userType: user.userType,
-        userOnboardingCompletedInDB: user.onboardingCompleted,
-        willBeCompleted: currentStep + 1 >= questions.length
-      });
-
-      // 🚨 CRITICAL CHECK: If already complete in DB, don't process again
-      if (user.onboardingCompleted && currentStep >= questions.length) {
-        logger.error('❌ ONBOARDING ALREADY COMPLETE - SHOULD NOT REPROCESS!', {
-          userId,
-          step: currentStep,
-          total: questions.length
-        });
-        return {
-          completed: true,
-          message: 'Your profile is complete!',
-          nextQuestion: null,
-          error: 'ALREADY_COMPLETE'
-        };
-      }
-
-      if (currentStep >= questions.length) {
-        logger.error('❌ CURRENTSTEP >= QUESTIONS LENGTH (SHOULD NOT HAPPEN)', {
-          userId,
-          currentStep,
-          questionsLength: questions.length
-        });
-        return {
-          completed: true,
-          message: 'आपकी प्रोफाइल पूरी हो गई है! 🎉\n\n(Your profile is complete! 🎉)',
-          nextQuestion: null
-        };
-      }
-
-      const questionObj = questions[currentStep];
-      logger.debug('📋 Processing Q' + currentStep + ':', {
-        key: questionObj.key,
-        questionPreview: questionObj.question.substring(0, 50)
-      });
-
-      const parsedValue = questionObj.parse(userResponse);
-
-      // Save response based on key and user type
-      if (user.userType === 'business') {
-        this._processBusinessResponse(user, questionObj.key, parsedValue);
-      } else {
-        this._processPersonalResponse(user, questionObj.key, parsedValue);
-      }
-
-      // Move to next step
-      user.onboardingStep = currentStep + 1;
-
-      // Mark as completed if all steps done
-      const willBeCompleted = user.onboardingStep >= questions.length;
-      if (willBeCompleted) {
-        user.onboardingCompleted = true;
-        user.onboardingStep = questions.length; // Cap at max
-        logger.error('🟢🟢🟢 SETTING ONBOARDING COMPLETE NOW 🟢🟢🟢', { 
-          userId, 
-          userType: user.userType,
-          finalStep: user.onboardingStep,
-          totalQuestions: questions.length
-        });
-      }
-
-      // 🔴 CRITICAL: Save to database
-      const saveResult = await user.save();
-      logger.warn('✅ USER SAVED:', {
-        userId,
-        onboardingCompleted: saveResult.onboardingCompleted,
-        onboardingStep: saveResult.onboardingStep
-      });
-      
-      // Verify save worked IMMEDIATELY
-      const verifiedUser = await User.findById(userId);
-      logger.error('⚠️ VERIFICATION IMMEDIATELY AFTER SAVE:', {
-        userId,
-        onboardingCompleted: verifiedUser.onboardingCompleted,
-        onboardingStep: verifiedUser.onboardingStep,
-        expectedCompleted: willBeCompleted
-      });
-
-      if (verifiedUser.onboardingCompleted !== willBeCompleted) {
-        logger.error('❌❌❌ SAVE VERIFICATION FAILED! ❌❌❌', {
-          expectedCompleted: willBeCompleted,
-          actualCompleted: verifiedUser.onboardingCompleted
-        });
-      }
-
-      // Get next question or completion message
-      let nextQuestion = null;
-      if (user.onboardingStep < questions.length) {
-        nextQuestion = this.getQuestion(user.onboardingStep, user.userType, user.preferredLanguage);
-      }
-
-      return {
-        completed: user.onboardingCompleted,
-        step: user.onboardingStep,
-        userType: user.userType,
-        message: 'धन्यवाद! 👍\n\n(Thank you! 👍)',
-        nextQuestion
-      };
-    } catch (error) {
-      logger.error('❌ Failed to process onboarding response:', {
-        error: error.message,
-        stack: error.stack,
-        userId
-      });
-      return {
-        completed: false,
-        error: error.message
-      };
-    }
-  }
-
-  /**
-   * Process personal user responses
-   */
-  static _processPersonalResponse(user, key, value) {
-    switch (key) {
-      case 'name':
-        user.name = value;
-        break;
-      case 'email':
-        user.email = value;
-        break;
-      case 'userType':
-        user.userType = value;
-        break;
-      case 'dailyActivities':
-        user.dailyActivities = value;
-        break;
-      case 'hobbies':
-        user.hobbies = value;
-        break;
-      case 'workStartTime':
-        user.workSchedule.startTime = value;
-        break;
-      case 'workEndTime':
-        user.workSchedule.endTime = value;
-        break;
-      case 'enableReminders':
-        user.reminderPreferences.enableReminders = value;
-        break;
-      case 'reminderTime':
-        user.reminderPreferences.reminderTime = value;
-        break;
-    }
-  }
-
-  /**
-   * Process business user responses
-   */
-  static _processBusinessResponse(user, key, value) {
-    switch (key) {
-      case 'name':
-        user.name = value;
-        break;
-      case 'email':
-        user.email = value;
-        break;
-      case 'userType':
-        user.userType = value;
-        break;
-      case 'businessName':
-        user.businessProfile.businessName = value;
-        break;
-      case 'businessType':
-        user.businessProfile.businessType = value;
-        break;
-      case 'businessDescription':
-        user.businessProfile.businessDescription = value;
-        break;
-      case 'businessEmail':
-        user.businessProfile.businessEmail = value;
-        break;
-      case 'businessStartTime':
-        user.businessProfile.businessHours.startTime = value;
-        break;
-      case 'businessEndTime':
-        user.businessProfile.businessHours.endTime = value;
-        break;
-      case 'services':
-        user.businessProfile.services = value;
-        break;
-      case 'numberOfEmployees':
-        user.businessProfile.numberOfEmployees = value;
-        break;
-      case 'monthlyTarget':
-        user.businessProfile.monthlyTarget = value;
-        break;
-      case 'enableBusinessFeatures':
-        user.businessProfile.enableClientTracking = value;
-        user.businessProfile.enableInvoiceTracking = value;
-        user.businessProfile.enableMeetingScheduling = value;
-        user.businessProfile.enableLeadTracking = value;
-        break;
-    }
-  }
-
-  /**
-   * Start onboarding for new user (get first question)
-   * @param {string} language - User's language preference (english/hindi/hinglish)
-   */
-  static getFirstQuestion(language = 'english') {
-    let questionSet = this.englishQuestions;
-    
-    if (language === 'hindi') {
-      questionSet = this.hindiQuestions;
-    } else if (language === 'hinglish') {
-      questionSet = this.hinglishQuestions;
-    }
-    
-    // Safety check: ensure base questions exist
-    if (!questionSet || !questionSet.base || !questionSet.base[0]) {
-      logger.warn(`No first question found for language: ${language}, defaulting to English`);
-      return this.englishQuestions.base[0].question;
-    }
-    
-    return questionSet.base[0].question;
-  }
-
-  /**
-   * Get onboarding progress
+   * Get progress
    */
   static async getProgress(userId) {
     const state = await this.getOnboardingState(userId);
@@ -647,9 +296,7 @@ class OnboardingService {
       completed: state.completed,
       step: state.step,
       totalSteps: total,
-      userType: state.userType,
-      progress: `${progress}%`,
-      profile: state.profile
+      percentage: progress
     };
   }
 }

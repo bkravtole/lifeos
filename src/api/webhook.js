@@ -9,17 +9,19 @@ import ReminderService from '../services/ReminderService.js';
 import RoutineService from '../services/RoutineService.js';
 import ActivityService from '../services/ActivityService.js';
 import OnboardingService from '../services/OnboardingService.js';
+import OnDemandScheduler from '../services/OnDemandScheduler.js';
 import User from '../models/User.js';
 import logger from '../utils/logger.js';
 import { connectDB } from '../utils/database.js';
 
 const router = express.Router();
-let aiEngine, whatsappService;
+let aiEngine, whatsappService, onDemandScheduler;
 
 // Initialize services
 try {
   aiEngine = new AIEngine();
   whatsappService = new whatsapp();
+  onDemandScheduler = new OnDemandScheduler();
 } catch (error) {
   logger.error('Failed to initialize services:', error.message);
 }
@@ -273,6 +275,14 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
       }
     }
     // ============ END ONBOARDING FLOW ============
+
+    // Check for due reminders/routines (Vercel-friendly scheduler)
+    try {
+      await onDemandScheduler.checkAndSendDueReminders(user._id);
+      await onDemandScheduler.checkAndSendDueRoutines(user._id);
+    } catch (error) {
+      logger.warn('On-demand scheduler check failed:', error.message);
+    }
 
     // Get or create context
     const context = await ContextEngine.getContext(user._id);

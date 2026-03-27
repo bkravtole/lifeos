@@ -100,21 +100,17 @@ export class ReminderService {
    * Get reminders due now (for scheduler)
    * Returns reminders that haven't been notified yet and are due
    */
-  static async getRemindersdue() {
+  static async getReminders() {
     try {
-      // Get reminders that are active, not yet notified, and have a datetime set
-      // We'll get reminders that might be due soon (within last 24 hours to handle different timezones/delays)
-      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      
-      return await Reminder.find({
+      // Get active reminders that haven't been notified
+      const reminders = await Reminder.find({
         status: 'active',
-        notified: false,
-        datetime: { 
-          $gte: oneDayAgo  // Get reminders set within last 24 hours
-        }
+        notified: false
       }).populate('userId');
+      
+      return reminders;
     } catch (error) {
-      logger.error('Failed to get reminders due:', error.message);
+      logger.error('Failed to get reminders:', error.message);
       return [];
     }
   }

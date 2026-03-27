@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import ActivityLog from '../models/ActivityLog.js';
 import logger from '../utils/logger.js';
 

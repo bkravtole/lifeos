@@ -40,7 +40,7 @@ export class SchedulerService {
     const job = cron.schedule('* * * * *', async () => {
       try {
         const now = new Date();
-        const reminders = await ReminderService.getRemindersdue();
+        const reminders = await ReminderService.getReminders();
 
         logger.debug(`📋 Reminder check at ${now.toISOString()} - found ${reminders.length} pending reminders`);
 
