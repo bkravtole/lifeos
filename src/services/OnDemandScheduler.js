@@ -25,25 +25,37 @@ export class OnDemandScheduler {
       const now = Date.now();
       const lastCheck = this.lastCheckTime[userId] || 0;
       
-      // Only check once per minute per user
-      if (now - lastCheck < 60000) {
-        logger.debug('Skipping reminder check - already checked recently for user:', { userId });
-        return;
-      }
-      
+      // Check every time (removed throttling - can throttle at webhook level if needed)
       this.lastCheckTime[userId] = now;
 
       const reminders = await ReminderService.getReminders();
       
-      // Filter for this user and due reminders
-      const userReminders = reminders.filter(r => r.userId._id.toString() === userId.toString());
+      // Filter for this user
+      const userReminders = reminders.filter(r => {
+        if (!r.userId) return false;
+        return r.userId._id.toString() === userId.toString();
+      });
       
-      logger.debug(`📋 On-demand check for user ${userId}: ${userReminders.length} pending reminders`);
+      logger.info(`📋 Checking ${userReminders.length} reminders for user ${userId}`, {
+        userId,
+        reminderCount: userReminders.length,
+        checkTime: new Date().toISOString()
+      });
 
       for (const reminder of userReminders) {
         try {
           const shouldSend = this._shouldSendReminder(reminder);
           
+          logger.debug('Reminder check:', {
+            reminderId: reminder._id,
+            title: reminder.title,
+            reminderTime: reminder.datetime,
+            currentTime: new Date().toISOString(),
+            shouldSend,
+            notified: reminder.notified,
+            status: reminder.status
+          });
+
           if (shouldSend) {
             const userPhone = reminder.userId?.phone;
             
@@ -52,6 +64,12 @@ export class OnDemandScheduler {
               continue;
             }
             
+            logger.info('🔔 Sending reminder:', {
+              reminderId: reminder._id,
+              title: reminder.title,
+              to: userPhone
+            });
+
             // Send WhatsApp reminder
             await this.whatsappService.sendMessage(
               userPhone,
@@ -61,7 +79,7 @@ export class OnDemandScheduler {
             // Mark as notified
             await ReminderService.markNotified(reminder._id);
 
-            logger.info('✅ On-demand reminder sent:', {
+            logger.info('✅ Reminder sent successfully:', {
               reminderId: reminder._id,
               phone: userPhone,
               title: reminder.title,
@@ -69,19 +87,21 @@ export class OnDemandScheduler {
             });
           }
         } catch (error) {
-          logger.error('Failed to send on-demand reminder:', {
+          logger.error('Failed to send reminder:', {
             reminderId: reminder._id,
-            error: error.message
+            error: error.message,
+            stack: error.stack
           });
         }
       }
     } catch (error) {
-      logger.error('On-demand reminder check failed:', error.message);
+      logger.error('Reminder check failed:', error.message, error.stack);
     }
   }
 
   /**
    * Check if reminder should be sent based on time and repeat pattern
+   * More lenient: triggers 2 minutes before to 1 minute after reminder time
    */
   _shouldSendReminder(reminder) {
     const now = new Date();
@@ -89,26 +109,58 @@ export class OnDemandScheduler {
     
     // Already notified
     if (reminder.notified) {
+      logger.debug('Reminder already notified, skipping', { reminderId: reminder._id });
       return false;
     }
 
-    // Check if within 1 minute of reminder time
-    const diffInMinutes = Math.abs(now - reminderTime) / 60000;
+    // Skip if status is not active
+    if (reminder.status !== 'active') {
+      logger.debug('Reminder status not active', { reminderId: reminder._id, status: reminder.status });
+      return false;
+    }
+
+    // Calculate difference in minutes
+    const diffInMs = now - reminderTime; // positive = past, negative = future
+    const diffInMinutes = diffInMs / 60000;
     
-    if (diffInMinutes <= 1) {
+    logger.debug('Time diff calculation:', {
+      reminderTime: reminderTime.toISOString(),
+      now: now.toISOString(),
+      diffInMinutes: diffInMinutes.toFixed(2),
+      isWithinRange: diffInMinutes >= -2 && diffInMinutes <= 1
+    });
+
+    // Send if within range: 2 minutes before to 1 minute after
+    if (diffInMinutes >= -2 && diffInMinutes <= 1) {
+      logger.info('✅ Reminder time matched!', {
+        reminderId: reminder._id,
+        reminderTime: reminderTime.toISOString(),
+        currentTime: now.toISOString(),
+        diffMinutes: diffInMinutes.toFixed(2)
+      });
       return true;
     }
 
-    // For repeating reminders, check if it's the right time today
+    // For repeating reminders, check if it's the right time today (by hour:minute)
     if (reminder.repeat && reminder.repeat !== 'none') {
       const targetHour = reminderTime.getHours();
       const targetMinute = reminderTime.getMinutes();
       const currentHour = now.getHours();
       const currentMinute = now.getMinutes();
 
+      logger.debug('Checking repeat pattern:', {
+        reminderHour: `${targetHour}:${String(targetMinute).padStart(2, '0')}`,
+        currentHour: `${currentHour}:${String(currentMinute).padStart(2, '0')}`,
+        repeat: reminder.repeat
+      });
+
       if (targetHour === currentHour && Math.abs(targetMinute - currentMinute) <= 1) {
         // Check if today is the right day
         if (this._isReminderDueToday(reminder)) {
+          logger.info('✅ Repeating reminder time matched!', {
+            reminderId: reminder._id,
+            repeat: reminder.repeat
+          });
           return true;
         }
       }
