@@ -789,6 +789,14 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
       });
       
       routeResult = await IntentRouter.route(aiResult.intent, enrichedEntities, handlers);
+      
+      // If the handler flagged the request as incomplete (e.g., missing time/activity),
+      // it has already sent a clarification message to the user. We should STOP here
+      // instead of generating a generic AI response.
+      if (routeResult && routeResult.incomplete) {
+        logger.info('🛑 Request is incomplete. Handler already sent clarification. Stopping generic response flow.');
+        return res.status(200).json({ status: 'ok', handled: 'incomplete' });
+      }
     } catch (error) {
       logger.warn('Route handling failed:', error.message);
     }
