@@ -33,7 +33,7 @@ export class IntentRouter {
           return await handlers.userService?.updateName(entities);
 
         case 'QUERY_REMINDERS':
-          return await handlers.reminderService?.queryReminders(entities);
+          return await handlers.userService?.queryReminders(entities);
 
         case 'CHAT':
           return await handlers.chatService?.chat(entities);

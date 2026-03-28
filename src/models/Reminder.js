@@ -18,15 +18,43 @@ const reminderSchema = new mongoose.Schema(
       required: true,
       index: true,
       default: () => {
-        // Default to current Kolkata time
+        // Default to current Kolkata time (UTC+5:30) with proper overflow handling
         const now = new Date();
-        const year = now.getUTCFullYear();
-        const month = String(now.getUTCMonth() + 1).padStart(2, '0');
-        const day = String(now.getUTCDate()).padStart(2, '0');
-        const hours = String(now.getUTCHours() + 5).padStart(2, '0');
-        const minutes = String((now.getUTCMinutes() + 30) % 60).padStart(2, '0');
-        const seconds = String(now.getUTCSeconds()).padStart(2, '0');
-        return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}+05:30`;
+        let year = now.getUTCFullYear();
+        let month = now.getUTCMonth() + 1; // 1-based
+        let day = now.getUTCDate();
+        let hours = now.getUTCHours() + 5;
+        let minutes = now.getUTCMinutes() + 30;
+        const seconds = now.getUTCSeconds();
+
+        // Carry overflow: minutes → hours
+        if (minutes >= 60) {
+          hours += 1;
+          minutes -= 60;
+        }
+
+        // Carry overflow: hours → day
+        if (hours >= 24) {
+          hours -= 24;
+          day += 1;
+          // Carry overflow: day → month → year
+          const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+          if (day > daysInMonth) {
+            day = 1;
+            month += 1;
+            if (month > 12) {
+              month = 1;
+              year += 1;
+            }
+          }
+        }
+
+        const monthStr = String(month).padStart(2, '0');
+        const dayStr = String(day).padStart(2, '0');
+        const hourStr = String(hours).padStart(2, '0');
+        const minuteStr = String(minutes).padStart(2, '0');
+        const secondStr = String(seconds).padStart(2, '0');
+        return `${year}-${monthStr}-${dayStr}T${hourStr}:${minuteStr}:${secondStr}+05:30`;
       }
     },
     repeat: {

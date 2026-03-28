@@ -16,10 +16,25 @@ export function parseTimeInKolkata(timeStr) {
   }
 
   try {
-    const now = new Date();
-    let year = now.getFullYear();
-    let month = now.getMonth() + 1;
-    let day = now.getDate();
+    // Bug 7 Fix: Compute "today" in Kolkata time (UTC+5:30), not raw server local time
+    const nowUtc = new Date();
+    let kYear = nowUtc.getUTCFullYear();
+    let kMonth = nowUtc.getUTCMonth() + 1; // 1-based
+    let kDay = nowUtc.getUTCDate();
+    let kHours = nowUtc.getUTCHours() + 5;
+    let kMinutes = nowUtc.getUTCMinutes() + 30;
+    if (kMinutes >= 60) { kHours += 1; kMinutes -= 60; }
+    if (kHours >= 24) {
+      kHours -= 24;
+      kDay += 1;
+      const daysInKMonth = new Date(Date.UTC(kYear, kMonth, 0)).getUTCDate();
+      if (kDay > daysInKMonth) { kDay = 1; kMonth += 1; }
+      if (kMonth > 12) { kMonth = 1; kYear += 1; }
+    }
+
+    let year = kYear;
+    let month = kMonth;
+    let day = kDay;
     let hour = null;
     let minute = 0;
     
@@ -106,32 +121,43 @@ export function parseTimeInKolkata(timeStr) {
  * @returns {string} - ISO string with Kolkata offset
  */
 export function getCurrentTimeInKolkata() {
+  // Bug 2 Fix: Properly handle minute → hour → day → month → year overflow
   const now = new Date();
-  const year = now.getUTCFullYear();
-  const month = String(now.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(now.getUTCDate()).padStart(2, '0');
-  
+  let year = now.getUTCFullYear();
+  let month = now.getUTCMonth() + 1; // 1-based
+  let day = now.getUTCDate();
   let hours = now.getUTCHours() + 5;
   let minutes = now.getUTCMinutes() + 30;
   let seconds = now.getUTCSeconds();
-  
+
   // Handle minute overflow
   if (minutes >= 60) {
     hours += 1;
     minutes -= 60;
   }
-  
-  // Handle hour/day overflow
+
+  // Handle hour/day overflow (Bug 2: was previously ignored with a comment)
   if (hours >= 24) {
     hours -= 24;
-    // Would need to increment day, but keeping simple for now
+    day += 1;
+    const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    if (day > daysInMonth) {
+      day = 1;
+      month += 1;
+      if (month > 12) {
+        month = 1;
+        year += 1;
+      }
+    }
   }
-  
+
+  const monthStr = String(month).padStart(2, '0');
+  const dayStr = String(day).padStart(2, '0');
   const hourStr = String(hours).padStart(2, '0');
   const minuteStr = String(minutes).padStart(2, '0');
   const secondStr = String(seconds).padStart(2, '0');
-  
-  return `${year}-${month}-${day}T${hourStr}:${minuteStr}:${secondStr}+05:30`;
+
+  return `${year}-${monthStr}-${dayStr}T${hourStr}:${minuteStr}:${secondStr}+05:30`;
 }
 
 /**
@@ -207,28 +233,36 @@ export function isReminderDue(reminderDateTime) {
     return false;
   }
   
-  // Get current Kolkata time (UTC + 5:30)
+  // Bug 3 Fix: Get current Kolkata time (UTC + 5:30) with proper date computation
   const nowUtc = new Date();
   let kolkataHours = nowUtc.getUTCHours() + 5;
   let kolkataMinutes = nowUtc.getUTCMinutes() + 30;
-  
-  // Handle minute overflow (when minutes >= 60)
+
+  // Handle minute overflow
   if (kolkataMinutes >= 60) {
     kolkataHours += 1;
     kolkataMinutes -= 60;
   }
-  
-  // Handle hour overflow (when hours >= 24)
-  kolkataHours = kolkataHours % 24;
-  
-  // Get today's date in Kolkata timezone
-  const today = new Date(nowUtc.getTime());
-  today.setUTCHours(today.getUTCHours() - 5);
-  today.setUTCMinutes(today.getUTCMinutes() - 30);
-  
-  const currentYear = today.getFullYear();
-  const currentMonth = today.getMonth() + 1;
-  const currentDay = today.getDate();
+
+  // Determine today's date in Kolkata (ADD 5:30 to UTC, use UTC getters)
+  let currentYear = nowUtc.getUTCFullYear();
+  let currentMonth = nowUtc.getUTCMonth() + 1; // 1-based
+  let currentDay = nowUtc.getUTCDate();
+
+  // If adding 5:30 hours caused a day rollover
+  if (kolkataHours >= 24) {
+    kolkataHours -= 24;
+    currentDay += 1;
+    const daysInCurrentMonth = new Date(Date.UTC(currentYear, currentMonth, 0)).getUTCDate();
+    if (currentDay > daysInCurrentMonth) {
+      currentDay = 1;
+      currentMonth += 1;
+      if (currentMonth > 12) {
+        currentMonth = 1;
+        currentYear += 1;
+      }
+    }
+  }
   
   console.log('⏰ Reminder time check (with DATE):', {
     reminderDate: `${reminderYear}-${String(reminderMonth).padStart(2, '0')}-${String(reminderDay).padStart(2, '0')}`,

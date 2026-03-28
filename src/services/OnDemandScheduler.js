@@ -27,7 +27,7 @@ export class OnDemandScheduler {
       this.lastCheckTime.global = now;
 
       const reminders = await ReminderService.getReminders();
-      
+
       logger.info(`🔔 On-demand check: ${reminders.length} reminders found`, {
         checkTime: new Date().toISOString()
       });
@@ -37,7 +37,7 @@ export class OnDemandScheduler {
       for (const reminder of reminders) {
         try {
           const shouldSend = this._shouldSendReminder(reminder);
-          
+
           logger.debug('Reminder evaluation:', {
             reminderId: reminder._id,
             title: reminder.title,
@@ -46,12 +46,12 @@ export class OnDemandScheduler {
 
           if (shouldSend) {
             const userPhone = reminder.userId?.phone;
-            
+
             if (!userPhone) {
               logger.error('Reminder has no phone:', { reminderId: reminder._id });
               continue;
             }
-            
+
             logger.info('🚀 SENDING REMINDER:', {
               reminderId: reminder._id,
               title: reminder.title,
@@ -94,16 +94,16 @@ export class OnDemandScheduler {
     try {
       const now = Date.now();
       const lastCheck = this.lastCheckTime[userId] || 0;
-      
+
       this.lastCheckTime[userId] = now;
 
       const reminders = await ReminderService.getReminders();
-      
+
       const userReminders = reminders.filter(r => {
         if (!r.userId) return false;
         return r.userId._id.toString() === userId.toString();
       });
-      
+
       logger.debug(`📋 User reminder check: ${userReminders.length} reminders`, {
         userId,
         checkTime: new Date().toISOString()
@@ -112,22 +112,22 @@ export class OnDemandScheduler {
       for (const reminder of userReminders) {
         try {
           const shouldSend = this._shouldSendReminder(reminder);
-          
+
           if (shouldSend) {
             const userPhone = reminder.userId?.phone;
-            
+
             if (!userPhone) {
               logger.error('Reminder missing phone:', { reminderId: reminder._id });
               continue;
             }
-            
+
             await this.whatsappService.sendMessage(
               userPhone,
               `⏰ ${reminder.title}\n\n${reminder.description || ''}`
             );
 
             await ReminderService.markNotified(reminder._id);
-            
+
             // Log activity for reminder sent
             try {
               await ActivityService.logActivity(
@@ -166,22 +166,31 @@ export class OnDemandScheduler {
    * For one-time: send once when time is reached
    * For daily/repeating: reset daily at midnight and send when time is reached each day
    */
-  _shouldSendReminder(reminder) {
+  async _shouldSendReminder(reminder) {
     // Already notified - but check if it's a daily reminder from a previous day
     if (reminder.notified) {
       // For daily reminders, check if we need to reset (new day)
       if (reminder.repeat === 'daily' && reminder.notifiedAt) {
         const notifiedDate = new Date(reminder.notifiedAt);
         const today = new Date();
-        
-        // If notified on a previous day, reset the flag
+
+        // If notified on a previous day, reset the flag in DB so it fires today
         if (notifiedDate.toDateString() !== today.toDateString()) {
-          logger.info('🔄 Daily reminder reset (new day detected)', {
+          logger.info('🔄 Daily reminder reset (new day detected) - resetting notified flag', {
             reminderId: reminder._id,
             lastSent: notifiedDate.toDateString(),
             today: today.toDateString()
           });
-          // Reset will happen during send, just continue checking
+          // Bug 5 Fix: Actually reset the flag in the DB (previously only logged, never wrote)
+          try {
+            const Reminder = (await import('../models/Reminder.js')).default;
+            await Reminder.findByIdAndUpdate(reminder._id, { notified: false, notifiedAt: null });
+            // Mutate in-memory too so the rest of the function sees updated state
+            reminder.notified = false;
+          } catch (resetError) {
+            logger.error('Failed to reset daily reminder notified flag:', resetError.message);
+            return false; // Skip this check; will retry next cycle
+          }
         } else {
           // Already sent today, skip
           logger.debug('Daily reminder already sent today, skipping', { reminderId: reminder._id });
@@ -225,7 +234,7 @@ export class OnDemandScheduler {
     if (reminder.repeat && reminder.repeat !== 'none') {
       // Parse time from the stored string format
       let targetHour, targetMinute;
-      
+
       if (typeof reminder.datetime === 'string') {
         const match = reminder.datetime.match(/T(\d{2}):(\d{2}):/);
         if (match) {
@@ -233,25 +242,24 @@ export class OnDemandScheduler {
           targetMinute = parseInt(match[2]);
         }
       }
-      
+
+      // Bug 4 Fix: Declare kolkataHours/kolkataMinutes BEFORE inner if-block
+      // so the else-branch debug log below doesn't cause a ReferenceError.
+      const nowUtc2 = new Date();
+      let kolkataHours = nowUtc2.getUTCHours() + 5;
+      let kolkataMinutes = nowUtc2.getUTCMinutes() + 30;
+      if (kolkataMinutes >= 60) {
+        kolkataHours += 1;
+        kolkataMinutes -= 60;
+      }
+      kolkataHours = kolkataHours % 24;
+
       if (targetHour !== undefined && targetMinute !== undefined) {
-        // Get current Kolkata time
-        const nowUtc = new Date();
-        let kolkataHours = nowUtc.getUTCHours() + 5;
-        let kolkataMinutes = nowUtc.getUTCMinutes() + 30;
-        
-        // Handle minute overflow
-        if (kolkataMinutes >= 60) {
-          kolkataHours += 1;
-          kolkataMinutes -= 60;
-        }
-        kolkataHours = kolkataHours % 24;
-        
         // For repeating reminders, check if we're at or after the scheduled time (same hour)
         // This uses the same logic as one-time reminders but for daily checks
         const targetTotalMinutes = targetHour * 60 + targetMinute;
         const currentTotalMinutes = kolkataHours * 60 + kolkataMinutes;
-        
+
         // Send if current time is at or after the scheduled time (but only once per day)
         // The notified flag prevents it from sending multiple times per day
         if (currentTotalMinutes >= targetTotalMinutes) {
@@ -268,7 +276,7 @@ export class OnDemandScheduler {
       logger.debug('Repeating reminder not due yet (before scheduled time):', {
         reminderId: reminder._id,
         repeat: reminder.repeat,
-        scheduledTime: targetHour ? `${String(targetHour).padStart(2, '0')}:${String(targetMinute).padStart(2, '0')}` : 'unknown',
+        scheduledTime: targetHour !== undefined ? `${String(targetHour).padStart(2, '0')}:${String(targetMinute).padStart(2, '0')}` : 'unknown',
         currentTime: `${String(kolkataHours).padStart(2, '0')}:${String(kolkataMinutes).padStart(2, '0')}`
       });
     }
@@ -282,11 +290,11 @@ export class OnDemandScheduler {
   _isReminderDueToday(reminder) {
     const today = new Date().getDay();
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    
+
     switch (reminder.repeat) {
       case 'daily':
         return true;
-      
+
       case 'weekly':
         // If daysOfWeek is specified, check if today is included
         if (reminder.daysOfWeek && Array.isArray(reminder.daysOfWeek)) {
@@ -295,12 +303,12 @@ export class OnDemandScheduler {
         }
         // Default: every 7 days from creation
         return true;
-      
+
       case 'monthly':
         // Check if today is the same day of month as reminder creation
         const reminderDate = new Date(reminder.datetime);
         return reminderDate.getDate() === new Date().getDate();
-      
+
       default:
         return false;
     }
@@ -316,7 +324,7 @@ export class OnDemandScheduler {
       const currentMinute = now.getMinutes();
 
       const routines = await RoutineService.getUserRoutines(userId);
-      
+
       for (const routine of routines) {
         if (routine.active === false) continue;
 
@@ -331,9 +339,9 @@ export class OnDemandScheduler {
 
             if (userPhone) {
               const message = `🎯 It's ${routine.activity} time! Let's make it happen 💪\n\nReply with "done" when completed.`;
-              
+
               await this.whatsappService.sendMessage(userPhone, message);
-              
+
               logger.info('✅ Routine reminder sent:', {
                 routineId: routine._id,
                 activity: routine.activity,
