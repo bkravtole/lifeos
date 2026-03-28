@@ -1,5 +1,6 @@
 import ReminderService from './ReminderService.js';
 import RoutineService from './RoutineService.js';
+import ActivityService from './ActivityService.js';
 import WhatsAppService from './WhatsAppService.js';
 import logger from '../utils/logger.js';
 import { isReminderDue, getTimeRemaining, formatTimeInKolkata, getCurrentTimeInKolkata } from '../utils/timezone.js';
@@ -126,6 +127,21 @@ export class OnDemandScheduler {
             );
 
             await ReminderService.markNotified(reminder._id);
+            
+            // Log activity for reminder sent
+            try {
+              await ActivityService.logActivity(
+                reminder.userId._id,
+                reminder.title,
+                'reminded',
+                {
+                  date: new Date(),
+                  notes: `Reminder sent via WhatsApp`
+                }
+              );
+            } catch (logError) {
+              logger.warn('Failed to log reminder activity:', logError.message);
+            }
 
             logger.info('✅ User reminder sent:', {
               reminderId: reminder._id,
@@ -147,13 +163,35 @@ export class OnDemandScheduler {
 
   /**
    * Check if reminder should be sent (timezone-aware: Asia/Kolkata)
-   * Triggers at the exact time or up to 1 minute after (never early!)
+   * For one-time: send once when time is reached
+   * For daily/repeating: reset daily at midnight and send when time is reached each day
    */
   _shouldSendReminder(reminder) {
-    // Already notified
+    // Already notified - but check if it's a daily reminder from a previous day
     if (reminder.notified) {
-      logger.debug('Reminder already notified, skipping', { reminderId: reminder._id });
-      return false;
+      // For daily reminders, check if we need to reset (new day)
+      if (reminder.repeat === 'daily' && reminder.notifiedAt) {
+        const notifiedDate = new Date(reminder.notifiedAt);
+        const today = new Date();
+        
+        // If notified on a previous day, reset the flag
+        if (notifiedDate.toDateString() !== today.toDateString()) {
+          logger.info('🔄 Daily reminder reset (new day detected)', {
+            reminderId: reminder._id,
+            lastSent: notifiedDate.toDateString(),
+            today: today.toDateString()
+          });
+          // Reset will happen during send, just continue checking
+        } else {
+          // Already sent today, skip
+          logger.debug('Daily reminder already sent today, skipping', { reminderId: reminder._id });
+          return false;
+        }
+      } else if (reminder.repeat !== 'daily' && reminder.repeat !== 'weekly' && reminder.repeat !== 'monthly') {
+        // One-time reminder already sent, skip
+        logger.debug('Reminder already notified, skipping', { reminderId: reminder._id });
+        return false;
+      }
     }
 
     // Skip if status is not active
@@ -209,26 +247,29 @@ export class OnDemandScheduler {
         }
         kolkataHours = kolkataHours % 24;
         
-        // For repeating reminders, check if hours and minutes match (at or up to 1 minute after)
-        const hourMatch = targetHour === kolkataHours;
-        const minuteDiff = targetMinute - kolkataMinutes;
-        const minuteMatch = minuteDiff >= -1 && minuteDiff <= 0; // Only at or after (not before!)
-
-        if (hourMatch && minuteMatch) {
-          logger.info('✅ Repeating reminder time matched:', {
+        // For repeating reminders, check if we're at or after the scheduled time (same hour)
+        // This uses the same logic as one-time reminders but for daily checks
+        const targetTotalMinutes = targetHour * 60 + targetMinute;
+        const currentTotalMinutes = kolkataHours * 60 + kolkataMinutes;
+        
+        // Send if current time is at or after the scheduled time (but only once per day)
+        // The notified flag prevents it from sending multiple times per day
+        if (currentTotalMinutes >= targetTotalMinutes) {
+          logger.info('✅ Repeating reminder time matched (at or after):', {
             reminderId: reminder._id,
             repeat: reminder.repeat,
-            reminderTime: kolkataTime
+            scheduledTime: `${String(targetHour).padStart(2, '0')}:${String(targetMinute).padStart(2, '0')}`,
+            currentTime: `${String(kolkataHours).padStart(2, '0')}:${String(kolkataMinutes).padStart(2, '0')}`
           });
           return true;
         }
       }
 
-      logger.debug('Repeating reminder not due yet:', {
+      logger.debug('Repeating reminder not due yet (before scheduled time):', {
         reminderId: reminder._id,
         repeat: reminder.repeat,
-        reminderHour: `${targetHour}:${String(targetMinute).padStart(2, '0')}`,
-        currentHour: `${currentHour}:${String(currentMinute).padStart(2, '0')}`
+        scheduledTime: targetHour ? `${String(targetHour).padStart(2, '0')}:${String(targetMinute).padStart(2, '0')}` : 'unknown',
+        currentTime: `${String(kolkataHours).padStart(2, '0')}:${String(kolkataMinutes).padStart(2, '0')}`
       });
     }
 

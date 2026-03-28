@@ -29,6 +29,12 @@ export class IntentRouter {
         case 'QUERY_ROUTINE':
           return await handlers.routineService?.queryRoutine(entities);
 
+        case 'UPDATE_NAME':
+          return await handlers.userService?.updateName(entities);
+
+        case 'QUERY_REMINDERS':
+          return await handlers.reminderService?.queryReminders(entities);
+
         case 'CHAT':
           return await handlers.chatService?.chat(entities);
 
@@ -48,6 +54,7 @@ export class IntentRouter {
   static getPriority(intent) {
     const priorityMap = {
       'CREATE_REMINDER': 1,
+      'UPDATE_NAME': 2,
       'DELETE_REMINDER': 2,
       'LOG_ACTIVITY': 3,
       'UPDATE_ROUTINE': 4,

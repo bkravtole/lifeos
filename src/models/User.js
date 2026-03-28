@@ -9,6 +9,7 @@ const userSchema = new mongoose.Schema(
       index: true
     },
     name: String,
+    nameAutoFilled: { type: Boolean, default: false }, // true if name came from WhatsApp senderName
     email: String,
     
     // Onboarding

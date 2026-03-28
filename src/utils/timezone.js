@@ -183,18 +183,24 @@ export function formatTimeInKolkata(date, formatStr = 'yyyy-MM-dd HH:mm:ss') {
  * @returns {boolean} - Whether to send the reminder
  */
 export function isReminderDue(reminderDateTime) {
-  // Parse reminder datetime
-  let reminderHour, reminderMinute;
+  // Parse reminder datetime - MUST include date!
+  let reminderYear, reminderMonth, reminderDay, reminderHour, reminderMinute;
   
   if (typeof reminderDateTime === 'string') {
-    // Parse ISO string like "2026-03-28T11:22:00+05:30"
+    // Parse ISO string like "2026-03-28T14:05:00+05:30"
     const match = reminderDateTime.match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
     if (!match) return false;
     
     const [, year, month, day, hour, minute] = match;
+    reminderYear = parseInt(year);
+    reminderMonth = parseInt(month);
+    reminderDay = parseInt(day);
     reminderHour = parseInt(hour);
     reminderMinute = parseInt(minute);
   } else if (reminderDateTime instanceof Date) {
+    reminderYear = reminderDateTime.getFullYear();
+    reminderMonth = reminderDateTime.getMonth() + 1;
+    reminderDay = reminderDateTime.getDate();
     reminderHour = reminderDateTime.getHours();
     reminderMinute = reminderDateTime.getMinutes();
   } else {
@@ -215,27 +221,42 @@ export function isReminderDue(reminderDateTime) {
   // Handle hour overflow (when hours >= 24)
   kolkataHours = kolkataHours % 24;
   
-  console.log('⏰ Reminder time check:', {
+  // Get today's date in Kolkata timezone
+  const today = new Date(nowUtc.getTime());
+  today.setUTCHours(today.getUTCHours() - 5);
+  today.setUTCMinutes(today.getUTCMinutes() - 30);
+  
+  const currentYear = today.getFullYear();
+  const currentMonth = today.getMonth() + 1;
+  const currentDay = today.getDate();
+  
+  console.log('⏰ Reminder time check (with DATE):', {
+    reminderDate: `${reminderYear}-${String(reminderMonth).padStart(2, '0')}-${String(reminderDay).padStart(2, '0')}`,
     reminderTime: `${String(reminderHour).padStart(2, '0')}:${String(reminderMinute).padStart(2, '0')}`,
-    kolkataTime: `${String(kolkataHours).padStart(2, '0')}:${String(kolkataMinutes).padStart(2, '0')}`,
-    hourMatch: reminderHour === kolkataHours,
-    minuteDiff: reminderMinute - kolkataMinutes
+    currentDate: `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(currentDay).padStart(2, '0')}`,
+    kolkataTime: `${String(kolkataHours).padStart(2, '0')}:${String(kolkataMinutes).padStart(2, '0')}`
   });
   
-  // Compare hours and minutes (trigger ONLY at time or up to 2 minutes after)
-  // Don't trigger before the scheduled time
-  const hourMatch = reminderHour === kolkataHours;
-  const minuteDiff = reminderMinute - kolkataMinutes;  // Directional, not absolute
+  // For one-time reminders: MUST match exact date AND time must have passed
+  // Check if dates match (year, month, day)
+  const dateMatch = reminderYear === currentYear && reminderMonth === currentMonth && reminderDay === currentDay;
   
-  // Trigger when:
-  // - Hour matches AND
-  // - Current minute >= reminder minute (at or after) - meaning minuteDiff <= 0 AND
-  // - Current minute <= reminder minute + 1 (within 1 min window after to allow for cron jitter)
-  // Important: minuteDiff >= 0 means we're BEFORE the scheduled time, so we DON'T want that!
-  const isDue = hourMatch && minuteDiff >= -1 && minuteDiff <= 0;
+  // Check if time has passed (current time >= reminder time)
+  const reminderTotalMinutes = reminderHour * 60 + reminderMinute;
+  const kolkataTotalMinutes = kolkataHours * 60 + kolkataMinutes;
+  const timeMatch = kolkataTotalMinutes >= reminderTotalMinutes;
+  
+  // Trigger ONLY if:
+  // 1. Date matches today
+  // 2. Time has passed
+  const isDue = dateMatch && timeMatch;
   
   if (isDue) {
-    console.log('✅ REMINDER IS DUE! (At exact time or within 1 min after)');
+    console.log('✅ REMINDER IS DUE! (Date & Time both match)');
+  } else if (!dateMatch) {
+    console.log('⏳ Reminder not due: Date mismatch (reminder date is future/past)');
+  } else if (!timeMatch) {
+    console.log('⏳ Reminder not due: Time not reached yet');
   }
   
   return isDue;

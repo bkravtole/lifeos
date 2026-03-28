@@ -14,132 +14,108 @@ import logger from '../utils/logger.js';
 class OnboardingService {
   // ==================== QUESTIONS ====================
   
-  static getQuestions(language = 'english') {
+  static getQuestions(language = 'english', skipName = false) {
     if (language === 'hindi') {
-      return [
-        {
+      const questions = [
+        skipName ? null : {
           step: 0,
           question: '👋 नमस्ते! मैं आपकी LifeOS सहायक हूँ। आपका नाम क्या है?',
           key: 'name',
           parse: (response) => response.trim()
         },
         {
-          step: 1,
+          step: skipName ? 0 : 1,
           question: '🌅 आप सुबह कितने बजे उठते हो? (HH:MM, जैसे: 06:00)',
           key: 'wakeUpTime',
           parse: (response) => response.trim()
         },
         {
-          step: 2,
+          step: skipName ? 1 : 2,
           question: '🌙 रात को कितने बजे सोते हो? (HH:MM, जैसे: 22:00)',
           key: 'sleepTime',
           parse: (response) => response.trim()
         },
         {
-          step: 3,
+          step: skipName ? 2 : 3,
           question: '📋 आपकी दैनिक गतिविधियाँ क्या हैं? (जैसे: gym, meditation, work - कॉमा से अलग करें)',
           key: 'dailyActivities',
           parse: (response) => response.split(',').map(item => item.trim()).filter(item => item)
-        },
-        {
-          step: 4,
-          question: '🔊 क्या मैं आपको रिमाइंडर दे सकता हूँ? (Yes/No)',
-          key: 'enableReminders',
-          parse: (response) => {
-            const ans = response.toLowerCase().trim();
-            return ans.includes('yes') || ans.includes('y') || ans.includes('हा') || ans.includes('हाँ') || ans.includes('जी');
-          }
         }
       ];
+      return questions.filter(q => q !== null);
     } else if (language === 'hinglish') {
-      return [
-        {
+      const questions = [
+        skipName ? null : {
           step: 0,
           question: '👋 Namaste! Main aapka LifeOS assistant hoon. Aapka naam kya hai?',
           key: 'name',
           parse: (response) => response.trim()
         },
         {
-          step: 1,
+          step: skipName ? 0 : 1,
           question: '🌅 Aap subah kab uthte ho? (HH:MM, jaise: 06:00)',
           key: 'wakeUpTime',
           parse: (response) => response.trim()
         },
         {
-          step: 2,
+          step: skipName ? 1 : 2,
           question: '🌙 Raat ko kab sote ho? (HH:MM, jaise: 22:00)',
           key: 'sleepTime',
           parse: (response) => response.trim()
         },
         {
-          step: 3,
+          step: skipName ? 2 : 3,
           question: '📋 Aapki daily activities kya hain? (jaise: gym, meditation, work - comma se alag karein)',
           key: 'dailyActivities',
           parse: (response) => response.split(',').map(item => item.trim()).filter(item => item)
-        },
-        {
-          step: 4,
-          question: '🔊 Kya main aapko reminders de sakta hoon? (Yes/No)',
-          key: 'enableReminders',
-          parse: (response) => {
-            const ans = response.toLowerCase().trim();
-            return ans.includes('yes') || ans.includes('y') || ans.includes('haa');
-          }
         }
       ];
+      return questions.filter(q => q !== null);
     } else {
       // English (default)
-      return [
-        {
+      const questions = [
+        skipName ? null : {
           step: 0,
           question: '👋 Hey! I\'m your LifeOS assistant. What\'s your name?',
           key: 'name',
           parse: (response) => response.trim()
         },
         {
-          step: 1,
+          step: skipName ? 0 : 1,
           question: '🌅 What time do you wake up? (HH:MM, e.g., 06:00)',
           key: 'wakeUpTime',
           parse: (response) => response.trim()
         },
         {
-          step: 2,
+          step: skipName ? 1 : 2,
           question: '🌙 What time do you sleep? (HH:MM, e.g., 22:00)',
           key: 'sleepTime',
           parse: (response) => response.trim()
         },
         {
-          step: 3,
+          step: skipName ? 2 : 3,
           question: '📋 What are your daily activities? (e.g., gym, meditation, work - comma separated)',
           key: 'dailyActivities',
           parse: (response) => response.split(',').map(item => item.trim()).filter(item => item)
-        },
-        {
-          step: 4,
-          question: '🔊 Can I send you reminders? (Yes/No)',
-          key: 'enableReminders',
-          parse: (response) => {
-            const ans = response.toLowerCase().trim();
-            return ans.includes('yes') || ans.includes('y');
-          }
         }
       ];
+      return questions.filter(q => q !== null);
     }
   }
 
   /**
    * Get first question
    */
-  static getFirstQuestion(language = 'english') {
-    const questions = this.getQuestions(language);
-    return questions[0].question;
+  static getFirstQuestion(language = 'english', skipName = false) {
+    const questions = this.getQuestions(language, skipName);
+    return questions[0]?.question || null;
   }
 
   /**
    * Get current question for user
    */
-  static getQuestion(step, language = 'english') {
-    const questions = this.getQuestions(language);
+  static getQuestion(step, language = 'english', skipName = false) {
+    const questions = this.getQuestions(language, skipName);
     const questionObj = questions.find(q => q.step === step);
     return questionObj ? questionObj.question : null;
   }
@@ -147,8 +123,10 @@ class OnboardingService {
   /**
    * Get total steps for onboarding
    */
-  static getTotalSteps() {
-    return 5; // 5 questions total
+  static getTotalSteps(skipName = false) {
+    // 4 questions if name is skipped (from WhatsApp senderName)
+    // 4 questions total (removed enableReminders since it defaults to true)
+    return skipName ? 3 : 4; // wake-up, sleep, activities (if skipName); else: wake-up, sleep, activities
   }
 
   /**

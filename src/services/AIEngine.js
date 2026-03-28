@@ -239,6 +239,36 @@ Return ONLY JSON:
       const userName = userContext?.userProfile?.name || '';
 
       // INTENT-SPECIFIC RESPONSES (priority over generic AI-generated responses)
+      if (intent === 'UPDATE_NAME') {
+        let newName = entities?.activity || entities?.name || routeResult?.data?.name || 'buddy';
+        
+        if (lang === 'hindi') {
+          return `✅ शानदार! अब से मैं आपको ${newName} के नाम से बुलूँगा! 😊`;
+        } else if (lang === 'hinglish') {
+          return `✅ Done! Ab se main aapko ${newName} ke naam se bulaunga! 😊`;
+        } else {
+          return `✅ Perfect! I'll call you ${newName} from now on! 😊`;
+        }
+      }
+
+      if (intent === 'QUERY_REMINDERS') {
+        // Use formatted reminder list from routeResult
+        const formatted = routeResult?.data?.formatted || '';
+        const count = routeResult?.data?.count || 0;
+        
+        if (count === 0) {
+          if (lang === 'hindi') {
+            return `📋 आपके पास कोई reminder नहीं है 😊\n\nअगर चाहो तो मैं आपके लिए reminder set कर दूँ?`;
+          } else if (lang === 'hinglish') {
+            return `📋 Aapke paas koi reminder nahi hai 😊\n\nAgar chahte ho to main aapke liye reminder set kar du?`;
+          } else {
+            return `📋 You don't have any reminders yet 😊\n\nWant me to set one for you?`;
+          }
+        }
+        
+        return formatted;
+      }
+
       if (intent === 'CREATE_REMINDER') {
         // Extract activity and time - try multiple sources
         let activity = entities?.activity || this._extractActivity(currentUserMessage) || 'reminder';

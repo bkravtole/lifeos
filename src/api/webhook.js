@@ -149,23 +149,30 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
     // Ensure user exists in DB
     let user = await User.findOne({ phone: rawMessage.from });
     let isNewUser = false;
+    let skipName = false;
+    
     if (!user) {
+      const hasSenderName = !!rawMessage.senderName && rawMessage.senderName.trim() !== '';
       user = new User({
         phone: rawMessage.from,
         name: rawMessage.senderName || 'User',
+        nameAutoFilled: hasSenderName,
         onboardingCompleted: false,
-        onboardingStep: 0,
+        onboardingStep: hasSenderName ? 0 : 0, // Start at 0 regardless, but skip name question if auto-filled
         preferredLanguage: userLanguage  // Set language from first message
       });
       await user.save();
+      skipName = hasSenderName; // Skip name question if it was auto-filled
       isNewUser = true;
-      logger.info('🆕 New user created:', { userId: user._id, phone: rawMessage.from, language: userLanguage });
+      logger.info('🆕 New user created:', { userId: user._id, phone: rawMessage.from, language: userLanguage, nameAutoFilled: hasSenderName });
     } else {
+      skipName = user.nameAutoFilled || false;
       logger.debug('👤 Existing user found:', {
         userId: user._id,
         onboardingCompleted: user.onboardingCompleted,
         onboardingStep: user.onboardingStep,
-        userType: user.userType
+        userType: user.userType,
+        nameAutoFilled: user.nameAutoFilled
       });
     }
 
@@ -194,7 +201,7 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
       
       if (isNewUser) {
         // First message - send warm welcome + first question combined in ONE message
-        const firstQuestion = OnboardingService.getFirstQuestion(user.preferredLanguage);
+        const firstQuestion = OnboardingService.getFirstQuestion(user.preferredLanguage, skipName);
         
         let welcomeWithQuestion = '';
         if (user.preferredLanguage === 'hindi') {
@@ -209,7 +216,7 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
         // Send SINGLE combined message with welcome + first question
         await whatsappService.sendMessage(rawMessage.from, welcomeWithQuestion);
         
-        logger.info('Sent welcome + first onboarding question combined:', { userId: user._id, language: user.preferredLanguage });
+        logger.info('Sent welcome + first onboarding question combined:', { userId: user._id, language: user.preferredLanguage, nameAutoFilled: skipName });
         return res.status(200).json({
           success: true,
           messageId: rawMessage.messageId,
@@ -326,6 +333,47 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
     // Add user message to conversation
     await ContextEngine.addMessage(user._id, 'user', processedMessage.text);
 
+    // Check for UPDATE_NAME intent (pattern-based, before AI)
+    const messageText = processedMessage.text.toLowerCase();
+    
+    // Check for QUERY_REMINDERS intent (pattern-based)
+    const queryReminderPatterns = [
+      /(?:show|list|display|tell|give)\s+(?:me\s+)?(?:my\s+)?reminders/i,
+      /kya\s+reminders\s+set\s+hain/i,                                  // Hindi: "kya reminders set hain"
+      /meri\s+reminders\s+(?:kya\s+)?hain/i,                           // Hindi: "meri reminders [kya] hain"
+      /reminders?\s+(?:bata|dikhao|batao)/i,                           // Hinglish variants
+      /kitne\s+reminders?\s+(?:set\s+)?hain/i,                          // Hindi: "kitne reminders set hain"
+      /remind(?:ers?)?\s+(?:list|dikhao|show)/i                        // Mixed variants
+    ];
+
+    let hasQueryRemindersMatch = false;
+    for (const pattern of queryReminderPatterns) {
+      if (pattern.test(messageText)) {
+        hasQueryRemindersMatch = true;
+        break;
+      }
+    }
+    
+    const nameUpdatePatterns = [
+      /(?:call|name)\s+me\s+(.+)/i,
+      /my\s+name\s+(?:is|should be)\s+(.+)/i,
+      /bulao\s+mujhe\s+(.+)/i,                    // Hindi: "bulao mujhe [name]"
+      /mera\s+naam\s+(.+)(?:\s+h|$)/i,           // Hindi: "mera naam [name] hai"
+      /rename\s+me\s+(?:to\s+)?(.+)/i,
+      /change\s+my\s+name\s+to\s+(.+)/i,
+      /mujhe\s+(.+)\s+bolao/i,                    // Hinglish: "[name] bolao"
+      /call\s+me\s+(.+)\s+(?:from now|aage se)?/i
+    ];
+
+    let updateNameMatch = null;
+    for (const pattern of nameUpdatePatterns) {
+      const match = messageText.match(pattern);
+      if (match && match[1]) {
+        updateNameMatch = match[1].trim();
+        break;
+      }
+    }
+
     // Detect intent using AI (Groq)
     let aiResult;
     try {
@@ -333,13 +381,28 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
         lastActivity: context.context.lastActivity,
         missedActivities: context.context.missedActivities
       });
+
+      // Override intent if name update pattern matched
+      if (updateNameMatch) {
+        aiResult.intent = 'UPDATE_NAME';
+        aiResult.activity = updateNameMatch;
+        aiResult.confidence = 0.95;
+        logger.info('🔤 UPDATE_NAME detected via pattern:', { newName: updateNameMatch });
+      }
+      
+      // Override intent if reminders query pattern matched
+      if (hasQueryRemindersMatch) {
+        aiResult.intent = 'QUERY_REMINDERS';
+        aiResult.confidence = 0.95;
+        logger.info('📋 QUERY_REMINDERS detected via pattern');
+      }
     } catch (error) {
       logger.warn('AI detection failed, defaulting to CHAT:', error.message);
       aiResult = {
-        intent: 'CHAT',
-        confidence: 0.5,
+        intent: updateNameMatch ? 'UPDATE_NAME' : (hasQueryRemindersMatch ? 'QUERY_REMINDERS' : 'CHAT'),
+        confidence: updateNameMatch ? 0.95 : (hasQueryRemindersMatch ? 0.95 : 0.5),
         entities: {},
-        activity: null
+        activity: updateNameMatch || null
       };
     }
 
@@ -348,6 +411,53 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
       reminderService: {
         createReminder: async (entities) => {
           try {
+            // Check for incomplete reminder (missing activity or time)
+            const activity = entities?.activity || '';
+            const datetime = entities?.datetime || entities?.time || '';
+            
+            const activityMissing = !activity || activity.toLowerCase() === 'reminder' || activity.toLowerCase() === 'unknown';
+            const timeMissing = !datetime || datetime.toLowerCase() === 'now' || datetime.toLowerCase() === 'unknown';
+            
+            // If critical info is missing, ask for clarification
+            if (activityMissing || timeMissing) {
+              logger.info('⚠️ Incomplete reminder detected - asking for clarification:', {
+                activity: activity || 'missing',
+                datetime: datetime || 'missing'
+              });
+              
+              const lang = aiEngine.detectLanguage(processedMessage.text);
+              let clarificationMsg = '';
+              
+              if (lang === 'hindi') {
+                if (activityMissing && timeMissing) {
+                  clarificationMsg = '🤔 Mujhe samajh nahi aaya! Batao:\n1️⃣ Kis chiz ke liye reminder chahiye?\n2️⃣ Kab reminder dena hai?';
+                } else if (activityMissing) {
+                  clarificationMsg = `🤔 Kaunsi chiz ke liye reminder set karvana hai?`;
+                } else {
+                  clarificationMsg = `💭 Kis time par reminder dena chahiye? (e.g., 2:30 PM ya "agle 30 minutes")`;
+                }
+              } else if (lang === 'hinglish') {
+                if (activityMissing && timeMissing) {
+                  clarificationMsg = '🤔 Mujhe samajh nahi aaya! Batao:\n1️⃣ Kis chiz ke liye reminder chahiye?\n2️⃣ Kab reminder dena hai?';
+                } else if (activityMissing) {
+                  clarificationMsg = `🤔 Kis cheez ke liye reminder set karna hai?`;
+                } else {
+                  clarificationMsg = `💭 Kis waqt par reminder de du? (e.g., 2:30 PM ya "next 30 minutes")`;
+                }
+              } else {
+                if (activityMissing && timeMissing) {
+                  clarificationMsg = '🤔 I need more details!\n1️⃣ What should I remind you about?\n2️⃣ When should I remind you?';
+                } else if (activityMissing) {
+                  clarificationMsg = `🤔 What should I remind you about?`;
+                } else {
+                  clarificationMsg = `💭 When should I remind you? (e.g., 2:30 PM or "in 30 minutes")`;
+                }
+              }
+              
+              await whatsappService.sendMessage(rawMessage.from, clarificationMsg);
+              return { success: false, incomplete: true, error: 'Missing activity or time' };
+            }
+            
             // Parse time string to datetime if needed
             let reminderDateTime = entities.datetime || entities.time;
             
@@ -487,6 +597,174 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
           } catch (error) {
             logger.error('Failed to query routines:', error.message);
             return { success: false };
+          }
+        }
+      },
+
+      userService: {
+        updateName: async (entities) => {
+          try {
+            const newName = entities.activity || entities.name;
+            if (!newName || newName.trim() === '') {
+              return { success: false, error: 'Name cannot be empty' };
+            }
+            
+            user.name = newName.trim();
+            user.nameAutoFilled = false; // Mark as user-provided
+            await user.save();
+            
+            logger.info('User name updated:', { userId: user._id, newName: user.name });
+            return { success: true, data: { name: user.name } };
+          } catch (error) {
+            logger.error('Failed to update name:', error.message);
+            return { success: false, error: error.message };
+          }
+        },
+        deleteReminder: async (entities) => {
+          try {
+            await ReminderService.deleteReminder(entities.reminderId);
+            return { success: true };
+          } catch (error) {
+            logger.error('Failed to delete reminder:', error.message);
+            return { success: false };
+          }
+        },
+        queryReminders: async (entities) => {
+          try {
+            const reminders = await ReminderService.getActiveReminders(user._id);
+            
+            if (!reminders || reminders.length === 0) {
+              return {
+                success: true,
+                data: {
+                  count: 0,
+                  reminders: [],
+                  formatted: 'No reminders set yet'
+                }
+              };
+            }
+            
+            // Categorize reminders
+            const daily = reminders.filter(r => r.repeat === 'daily');
+            const oneTime = reminders.filter(r => r.repeat === 'none' || !r.repeat);
+            const weekly = reminders.filter(r => r.repeat === 'weekly');
+            const monthly = reminders.filter(r => r.repeat === 'monthly');
+            
+            // Format for user display
+            let formattedList = '';
+            const lang = aiEngine.detectLanguage(processedMessage.text);
+            
+            if (lang === 'hindi') {
+              formattedList = `📋 **आपके Reminders** (कुल: ${reminders.length})\n\n`;
+              
+              if (daily.length > 0) {
+                formattedList += `🔁 **रोज़:**\n`;
+                daily.forEach((r, i) => {
+                  const time = r.datetime.match(/T(\d{2}:\d{2})/)?.[1] || 'unknown';
+                  formattedList += `${i + 1}. ${r.title} @ ${time}\n`;
+                });
+                formattedList += '\n';
+              }
+              
+              if (oneTime.length > 0) {
+                formattedList += `⏰ **एक बार:**\n`;
+                oneTime.forEach((r, i) => {
+                  const date = r.datetime.split('T')[0];
+                  const time = r.datetime.match(/T(\d{2}:\d{2})/)?.[1] || 'unknown';
+                  formattedList += `${i + 1}. ${r.title} @ ${time} (${date})\n`;
+                });
+                formattedList += '\n';
+              }
+              
+              if (weekly.length > 0) {
+                formattedList += `📅 **साप्ताहिक:**\n`;
+                weekly.forEach((r, i) => {
+                  const time = r.datetime.match(/T(\d{2}:\d{2})/)?.[1] || 'unknown';
+                  formattedList += `${i + 1}. ${r.title} @ ${time}\n`;
+                });
+              }
+            } else if (lang === 'hinglish') {
+              formattedList = `📋 **Aapki Reminders** (Total: ${reminders.length})\n\n`;
+              
+              if (daily.length > 0) {
+                formattedList += `🔁 **Daily:**\n`;
+                daily.forEach((r, i) => {
+                  const time = r.datetime.match(/T(\d{2}:\d{2})/)?.[1] || 'unknown';
+                  formattedList += `${i + 1}. ${r.title} @ ${time}\n`;
+                });
+                formattedList += '\n';
+              }
+              
+              if (oneTime.length > 0) {
+                formattedList += `⏰ **One-time:**\n`;
+                oneTime.forEach((r, i) => {
+                  const date = r.datetime.split('T')[0];
+                  const time = r.datetime.match(/T(\d{2}:\d{2})/)?.[1] || 'unknown';
+                  formattedList += `${i + 1}. ${r.title} @ ${time} (${date})\n`;
+                });
+                formattedList += '\n';
+              }
+              
+              if (weekly.length > 0) {
+                formattedList += `📅 **Weekly:**\n`;
+                weekly.forEach((r, i) => {
+                  const time = r.datetime.match(/T(\d{2}:\d{2})/)?.[1] || 'unknown';
+                  formattedList += `${i + 1}. ${r.title} @ ${time}\n`;
+                });
+              }
+            } else {
+              formattedList = `📋 **Your Reminders** (Total: ${reminders.length})\n\n`;
+              
+              if (daily.length > 0) {
+                formattedList += `🔁 **Daily:**\n`;
+                daily.forEach((r, i) => {
+                  const time = r.datetime.match(/T(\d{2}:\d{2})/)?.[1] || 'unknown';
+                  formattedList += `${i + 1}. ${r.title} @ ${time}\n`;
+                });
+                formattedList += '\n';
+              }
+              
+              if (oneTime.length > 0) {
+                formattedList += `⏰ **One-time:**\n`;
+                oneTime.forEach((r, i) => {
+                  const date = r.datetime.split('T')[0];
+                  const time = r.datetime.match(/T(\d{2}:\d{2})/)?.[1] || 'unknown';
+                  formattedList += `${i + 1}. ${r.title} @ ${time} (${date})\n`;
+                });
+                formattedList += '\n';
+              }
+              
+              if (weekly.length > 0) {
+                formattedList += `📅 **Weekly:**\n`;
+                weekly.forEach((r, i) => {
+                  const time = r.datetime.match(/T(\d{2}:\d{2})/)?.[1] || 'unknown';
+                  formattedList += `${i + 1}. ${r.title} @ ${time}\n`;
+                });
+              }
+            }
+            
+            logger.info('Reminders queried:', {
+              userId: user._id,
+              total: reminders.length,
+              daily: daily.length,
+              oneTime: oneTime.length,
+              weekly: weekly.length
+            });
+            
+            return {
+              success: true,
+              data: {
+                count: reminders.length,
+                daily: daily.length,
+                oneTime: oneTime.length,
+                weekly: weekly.length,
+                reminders,
+                formatted: formattedList
+              }
+            };
+          } catch (error) {
+            logger.error('Failed to query reminders:', error.message);
+            return { success: false, error: error.message };
           }
         }
       }
