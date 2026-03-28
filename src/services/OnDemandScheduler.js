@@ -36,7 +36,7 @@ export class OnDemandScheduler {
 
       for (const reminder of reminders) {
         try {
-          const shouldSend = this._shouldSendReminder(reminder);
+          const shouldSend = await this._shouldSendReminder(reminder);
 
           logger.debug('Reminder evaluation:', {
             reminderId: reminder._id,
@@ -111,7 +111,7 @@ export class OnDemandScheduler {
 
       for (const reminder of userReminders) {
         try {
-          const shouldSend = this._shouldSendReminder(reminder);
+          const shouldSend = await this._shouldSendReminder(reminder);
 
           if (shouldSend) {
             const userPhone = reminder.userId?.phone;
