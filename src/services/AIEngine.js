@@ -375,13 +375,14 @@ Return ONLY JSON:
       if (intent === 'CREATE_GOAL') {
         const goalTitle = entities?.activity || entities?.goal || 'your goal';
         const deadline = entities?.deadline || entities?.time || '';
+        const taskList = routeResult?.data?.taskList ? `\n\n📋 **Planned Tasks:**\n${routeResult.data.taskList}` : '';
         
         if (lang === 'hindi') {
-          return `🎯 शानदार लक्ष्य! मैंने "${goalTitle}" को सबटास्क में तोड़कर आपके लिए plan बनाया है!${deadline ? ' Deadline: ' + deadline : ''}\n\n📋 आपके daily reminders अभी set हो रहे हैं... ✅`;
+          return `🎯 शानदार लक्ष्य! मैंने "${goalTitle}" को सबटास्क में तोड़कर आपके लिए plan बनाया है!${deadline ? ' Deadline: ' + deadline : ''}${taskList}\n\n✅ आपके daily reminders set कर दिए गए हैं!`;
         } else if (lang === 'hinglish') {
-          return `🎯 Great goal! Maine "${goalTitle}" ko sub-tasks mein todke aapke liye plan banaya hai!${deadline ? ' Deadline: ' + deadline : ''}\n\n📋 Aapke daily reminders set ho rahe hain... ✅`;
+          return `🎯 Great goal! Maine "${goalTitle}" ko sub-tasks mein todke aapke liye plan banaya hai!${deadline ? ' Deadline: ' + deadline : ''}${taskList}\n\n✅ Aapke daily reminders set kar diye gaye hain!`;
         } else {
-          return `🎯 Great goal! I've broken down "${goalTitle}" into actionable sub-tasks!${deadline ? ' Deadline: ' + deadline : ''}\n\n📋 Your daily reminders are being set up... ✅`;
+          return `🎯 Great goal! I've broken down "${goalTitle}" into actionable sub-tasks!${deadline ? ' Deadline: ' + deadline : ''}${taskList}\n\n✅ Your daily reminders have been set up!`;
         }
       }
 
