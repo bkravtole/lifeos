@@ -3,6 +3,7 @@ import ReminderService from './ReminderService.js';
 import RoutineService from './RoutineService.js';
 import WhatsAppService from './WhatsAppService.js';
 import logger from '../utils/logger.js';
+import { isReminderDue, formatTimeInKolkata, getTimeRemaining } from '../utils/timezone.js';
 
 /**
  * Reminder Scheduler
@@ -121,58 +122,57 @@ export class ReminderScheduler {
       return { sent: false, reason: 'No phone number' };
     }
 
-    // Calculate time difference
-    const diffInMs = now - reminderTime;
-    const diffInMinutes = diffInMs / 60000;
-    const diffInSeconds = diffInMs / 1000;
+    // Check time using timezone-aware logic (Asia/Kolkata)
+    const dueTime = isReminderDue(reminder.datetime);
+    const timeRemaining = getTimeRemaining(reminder.datetime);
+    const kolkataTime = formatTimeInKolkata(reminder.datetime, 'HH:mm:ss');
 
-    logger.debug('Processing reminder:', {
+    logger.debug('Processing reminder (Asia/Kolkata timezone):', {
       title: reminder.title,
-      reminderTime: reminderTime.toISOString(),
-      currentTime: now.toISOString(),
-      diffMinutes: diffInMinutes.toFixed(2),
-      diffSeconds: diffInSeconds.toFixed(1),
-      repeat: reminder.repeat
+      reminderTime: kolkataTime,
+      timeStatus: timeRemaining,
+      repeat: reminder.repeat,
+      isDueTime: dueTime
     });
 
-    // Check if within time window: 2 minutes BEFORE to 5 minutes AFTER
-    const isWithinWindow = diffInMinutes >= -2 && diffInMinutes <= 5;
-
-    if (!isWithinWindow) {
-      return { sent: false, reason: `Outside time window (${diffInMinutes.toFixed(1)}m)` };
-    }
-
-    // **SPECIAL CASE**: For one-time reminders, send if within window
+    // **ONE-TIME REMINDERS**: Send if within time window
     if (!reminder.repeat || reminder.repeat === 'none') {
-      return await this.sendReminder(reminder);
+      if (dueTime) {
+        return await this.sendReminder(reminder);
+      }
+      return { sent: false, reason: `Not yet due (${timeRemaining})` };
     }
 
-    // **REPEATING REMINDERS**: Check day and time match
+    // **REPEATING REMINDERS**: Check time match in Kolkata timezone
     if (reminder.repeat === 'daily') {
-      // Send every day at the same time
-      const targetHour = reminderTime.getHours();
-      const targetMinute = reminderTime.getMinutes();
-      const currentHour = now.getHours();
-      const currentMinute = now.getMinutes();
+      const reminderDate = new Date(reminder.datetime);
+      const targetHour = reminderDate.getUTCHours();
+      const targetMinute = reminderDate.getUTCMinutes();
+      
+      const now = new Date();
+      const currentHour = now.getUTCHours();
+      const currentMinute = now.getUTCMinutes();
 
-      // Allow 5-minute window around target time
-      if (currentHour === targetHour && Math.abs(currentMinute - targetMinute) <= 5) {
+      // Allow 1-minute window around target time
+      if (currentHour === targetHour && Math.abs(currentMinute - targetMinute) <= 1) {
         return await this.sendReminder(reminder);
       }
 
-      return { sent: false, reason: `Daily: waiting for ${targetHour}:${String(targetMinute).padStart(2, '0')}` };
+      return { sent: false, reason: `Daily: waiting for ${String(targetHour).padStart(2, '0')}:${String(targetMinute).padStart(2, '0')}` };
     }
 
     if (reminder.repeat === 'weekly') {
-      // Send once per week on the same day and time
-      const targetDay = reminderTime.getDay();
-      const targetHour = reminderTime.getHours();
-      const targetMinute = reminderTime.getMinutes();
-      const currentDay = now.getDay();
-      const currentHour = now.getHours();
-      const currentMinute = now.getMinutes();
+      const reminderDate = new Date(reminder.datetime);
+      const targetDay = reminderDate.getUTCDay();
+      const targetHour = reminderDate.getUTCHours();
+      const targetMinute = reminderDate.getUTCMinutes();
+      
+      const now = new Date();
+      const currentDay = now.getUTCDay();
+      const currentHour = now.getUTCHours();
+      const currentMinute = now.getUTCMinutes();
 
-      if (currentDay === targetDay && currentHour === targetHour && Math.abs(currentMinute - targetMinute) <= 5) {
+      if (currentDay === targetDay && currentHour === targetHour && Math.abs(currentMinute - targetMinute) <= 1) {
         return await this.sendReminder(reminder);
       }
 

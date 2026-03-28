@@ -2,6 +2,7 @@ import ReminderService from './ReminderService.js';
 import RoutineService from './RoutineService.js';
 import WhatsAppService from './WhatsAppService.js';
 import logger from '../utils/logger.js';
+import { isReminderDue, getTimeRemaining, formatTimeInKolkata, getCurrentTimeInKolkata } from '../utils/timezone.js';
 
 /**
  * On-Demand Scheduler
@@ -145,13 +146,10 @@ export class OnDemandScheduler {
   }
 
   /**
-   * Check if reminder should be sent based on time and repeat pattern
-   * More lenient: triggers 2 minutes before to 1 minute after reminder time
+   * Check if reminder should be sent (timezone-aware: Asia/Kolkata)
+   * Triggers 2 minutes before to 1 minute after reminder time
    */
   _shouldSendReminder(reminder) {
-    const now = new Date();
-    const reminderTime = new Date(reminder.datetime);
-    
     // Already notified
     if (reminder.notified) {
       logger.debug('Reminder already notified, skipping', { reminderId: reminder._id });
@@ -164,51 +162,56 @@ export class OnDemandScheduler {
       return false;
     }
 
-    // Calculate difference in minutes
-    const diffInMs = now - reminderTime; // positive = past, negative = future
-    const diffInMinutes = diffInMs / 60000;
-    
-    logger.debug('Time diff calculation:', {
-      reminderTime: reminderTime.toISOString(),
-      now: now.toISOString(),
-      diffInMinutes: diffInMinutes.toFixed(2),
-      isWithinRange: diffInMinutes >= -2 && diffInMinutes <= 1
+    // Check if reminder is due using timezone-aware comparison
+    const isDue = isReminderDue(reminder.datetime);
+    const timeRemaining = getTimeRemaining(reminder.datetime);
+    const kolkataTime = formatTimeInKolkata(reminder.datetime, 'HH:mm:ss');
+
+    logger.debug('Reminder time check (Asia/Kolkata):', {
+      reminderId: reminder._id,
+      reminderTime: kolkataTime,
+      timeStatus: timeRemaining,
+      isDue
     });
 
-    // Send if within range: 2 minutes before to 1 minute after
-    if (diffInMinutes >= -2 && diffInMinutes <= 1) {
-      logger.info('✅ Reminder time matched!', {
+    if (isDue) {
+      logger.info('✅ Reminder time matched (Asia/Kolkata)!', {
         reminderId: reminder._id,
-        reminderTime: reminderTime.toISOString(),
-        currentTime: now.toISOString(),
-        diffMinutes: diffInMinutes.toFixed(2)
+        reminderTime: kolkataTime,
+        status: timeRemaining
       });
       return true;
     }
 
-    // For repeating reminders, check if it's the right time today (by hour:minute)
+    // For repeating reminders, check if it's the right time (by hour:minute in Kolkata)
     if (reminder.repeat && reminder.repeat !== 'none') {
-      const targetHour = reminderTime.getHours();
-      const targetMinute = reminderTime.getMinutes();
-      const currentHour = now.getHours();
-      const currentMinute = now.getMinutes();
+      const reminderDate = new Date(reminder.datetime);
+      const targetHour = reminderDate.getUTCHours();
+      const targetMinute = reminderDate.getUTCMinutes();
+      
+      const now = new Date();
+      const currentHour = now.getUTCHours();
+      const currentMinute = now.getUTCMinutes();
 
-      logger.debug('Checking repeat pattern:', {
-        reminderHour: `${targetHour}:${String(targetMinute).padStart(2, '0')}`,
-        currentHour: `${currentHour}:${String(currentMinute).padStart(2, '0')}`,
-        repeat: reminder.repeat
-      });
+      // For repeating reminders, check if hours and minutes match (within 1 minute window)
+      const hourMatch = targetHour === currentHour;
+      const minuteMatch = Math.abs(targetMinute - currentMinute) <= 1;
 
-      if (targetHour === currentHour && Math.abs(targetMinute - currentMinute) <= 1) {
-        // Check if today is the right day
-        if (this._isReminderDueToday(reminder)) {
-          logger.info('✅ Repeating reminder time matched!', {
-            reminderId: reminder._id,
-            repeat: reminder.repeat
-          });
-          return true;
-        }
+      if (hourMatch && minuteMatch) {
+        logger.info('✅ Repeating reminder time matched:', {
+          reminderId: reminder._id,
+          repeat: reminder.repeat,
+          reminderTime: kolkataTime
+        });
+        return true;
       }
+
+      logger.debug('Repeating reminder not due yet:', {
+        reminderId: reminder._id,
+        repeat: reminder.repeat,
+        reminderHour: `${targetHour}:${String(targetMinute).padStart(2, '0')}`,
+        currentHour: `${currentHour}:${String(currentMinute).padStart(2, '0')}`
+      });
     }
 
     return false;

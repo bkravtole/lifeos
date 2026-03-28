@@ -13,6 +13,7 @@ import OnDemandScheduler from '../services/OnDemandScheduler.js';
 import User from '../models/User.js';
 import logger from '../utils/logger.js';
 import { connectDB } from '../utils/database.js';
+import { parseTimeInKolkata, formatTimeInKolkata } from '../utils/timezone.js';
 
 const router = express.Router();
 let aiEngine, whatsappService, onDemandScheduler;
@@ -27,15 +28,11 @@ try {
 }
 
 /**
- * Parse time string to DateTime
- * Handles formats like "09:00", "9 AM", "2:30 PM", "tomorrow 3 PM", etc.
- */
-/**
- * Parse time string to DateTime
- * Handles: "14:30", "2:30 PM", "00:15 AM", "tomorrow 9 AM", "9 AM today", etc.
+ * Parse time string to DateTime using Asia/Kolkata timezone
+ * Handles formats like "09:00", "9 AM", "2:30 PM", "tomorrow 3 PM", "10:43 AM today", etc.
  * 
  * @param {string} timeStr - Time input string
- * @returns {Date|null} - Parsed datetime or null if invalid
+ * @returns {Date|null} - Parsed datetime in UTC (for database storage) or null if invalid
  */
 function parseTimeToDateTime(timeStr) {
   if (!timeStr || typeof timeStr !== 'string') {
@@ -44,100 +41,28 @@ function parseTimeToDateTime(timeStr) {
   }
 
   try {
-    const now = new Date();
-    let targetDate = new Date(now);
-    let hour = null;
-    let minute = 0;
+    const parsedUTC = parseTimeInKolkata(timeStr);
     
-    const lowerStr = timeStr.toLowerCase().trim();
-    
-    logger.debug('Parsing time string:', { input: timeStr, lower: lowerStr });
-
-    // Extract time (handles "14:30", "14 30", "2:30", "00:15", etc)
-    // Regex: \d{1,2} (1-2 digits) then optional [:/ ] then optional \d{2}
-    const timeMatch = lowerStr.match(/(\d{1,2})\s*[:./]?\s*(\d{2})?\s*(am|pm|a\.m|p\.m)?/i);
-    
-    if (timeMatch) {
-      hour = parseInt(timeMatch[1]);
-      minute = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
-      
-      logger.debug('Extracted time:', { hour, minute, ampm: timeMatch[3] });
-
-      // Handle AM/PM conversion
-      if (timeMatch[3]) {
-        const ampm = timeMatch[3].toLowerCase().replace('.', '');
-        if (ampm === 'pm' && hour < 12) {
-          hour += 12;
-          logger.debug(`Converted ${hour - 12} PM to ${hour}`);
-        }
-        if (ampm === 'am' && hour === 12) {
-          hour = 0;
-          logger.debug('Converted 12 AM to 00');
-        }
-      }
-
-      // Validate hour/minute
-      if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
-        logger.warn('Invalid hour/minute:', { hour, minute });
-        return null;
-      }
+    if (!parsedUTC) {
+      logger.warn('Could not parse time string:', { input: timeStr });
+      return null;
     }
 
-    // If no time found, use default
-    if (hour === null) {
-      logger.warn('No time found in string, using default 9 AM');
-      hour = 9;
-      minute = 0;
-    }
-
-    // Determine target date
-    if (lowerStr.includes('tomorrow') || lowerStr.includes('कल') || lowerStr.includes('agle din')) {
-      targetDate.setDate(targetDate.getDate() + 1);
-      logger.debug('Set to tomorrow');
-    } else if (lowerStr.includes('today') || lowerStr.includes('आज') || lowerStr.includes('aaj')) {
-      // Today - check if time has already passed
-      targetDate = new Date(now);
-      const proposedTime = new Date(now);
-      proposedTime.setHours(hour, minute, 0, 0);
-      
-      if (proposedTime <= now) {
-        // Time has passed today, move to tomorrow
-        targetDate.setDate(targetDate.getDate() + 1);
-        logger.debug('Time passed today, moved to tomorrow');
-      } else {
-        logger.debug('Time is still today');
-      }
-    } else {
-      // Default: if time is in the future today, use today; otherwise tomorrow
-      const proposedTime = new Date(now);
-      proposedTime.setHours(hour, minute, 0, 0);
-      
-      if (proposedTime > now) {
-        targetDate = new Date(now);
-        logger.debug('Future time today');
-      } else {
-        targetDate.setDate(targetDate.getDate() + 1);
-        logger.debug('Time in past, moved to tomorrow');
-      }
-    }
-
-    // Set the time
-    targetDate.setHours(hour, minute, 0, 0);
-    
-    logger.info('✅ Time parsed successfully:', {
+    // Log for debugging
+    const displayTime = formatTimeInKolkata(parsedUTC, 'yyyy-MM-dd HH:mm:ss');
+    logger.info('✅ Time parsed in Asia/Kolkata timezone:', {
       input: timeStr,
-      parsed: targetDate.toISOString(),
-      hour,
-      minute,
-      now: now.toISOString()
+      storedAsUTC: parsedUTC.toISOString(),
+      displayInKolkata: displayTime + ' (Asia/Kolkata)'
     });
 
-    return targetDate;
+    return parsedUTC;
   } catch (error) {
     logger.error('Error parsing time:', { error: error.message, input: timeStr });
     return null;
   }
 }
+
 
 
 /**
@@ -155,11 +80,12 @@ router.get('/ping', (req, res) => {
 });
 
 /**
- * POST /webhook/trigger-reminders
+ * GET/POST /webhook/trigger-reminders
  * Manual endpoint to trigger reminder checks (for external cron services)
  * Can be called by services like EasyCron to check reminders on a schedule
+ * Accepts both GET and POST (some services send GET by default)
  */
-router.post('/trigger-reminders', async (req, res) => {
+const triggerRemindersHandler = async (req, res) => {
   try {
     await connectDB();
     
@@ -178,7 +104,10 @@ router.post('/trigger-reminders', async (req, res) => {
       error: error.message
     });
   }
-});
+};
+
+router.get('/trigger-reminders', triggerRemindersHandler);
+router.post('/trigger-reminders', triggerRemindersHandler);
 
 /**
  * POST /webhook/whatsapp
@@ -750,6 +679,84 @@ router.get('/debug/trigger-status', async (req, res) => {
   } catch (error) {
     res.status(500).json({
       error: error.message
+    });
+  }
+});
+
+/**
+ * POST /webhook/debug/test-reminder
+ * Test endpoint to manually create and trigger a reminder
+ * Useful for testing reminder creation and sending logic
+ */
+router.post('/debug/test-reminder', async (req, res) => {
+  try {
+    await connectDB();
+    
+    const { userId, title, timeStr } = req.body;
+    
+    if (!userId || !title || !timeStr) {
+      return res.status(400).json({
+        error: 'Missing required fields: userId, title, timeStr',
+        example: {
+          userId: 'user_id_from_db',
+          title: 'Test Reminder',
+          timeStr: 'in 2 minutes'
+        }
+      });
+    }
+
+    // Parse the time string
+    const reminderDateTime = parseTimeToDateTime(timeStr);
+    
+    if (!reminderDateTime) {
+      return res.status(400).json({
+        error: 'Could not parse time string',
+        input: timeStr,
+        currentTime: new Date().toISOString()
+      });
+    }
+
+    logger.info('🧪 Creating test reminder:', {
+      userId,
+      title,
+      timeStr,
+      parsedDateTime: reminderDateTime.toISOString()
+    });
+
+    // Create reminder
+    const reminder = new (require('../models/Reminder.js').default)({
+      userId,
+      title,
+      datetime: reminderDateTime,
+      repeat: 'none',
+      status: 'active',
+      priority: 'high'
+    });
+
+    await reminder.save();
+
+    res.status(200).json({
+      success: true,
+      reminder: {
+        _id: reminder._id,
+        title: reminder.title,
+        datetime: reminder.datetime.toISOString(),
+        status: reminder.status,
+        notified: reminder.notified,
+        createdAt: reminder.createdAt.toISOString()
+      },
+      message: 'Test reminder created. Cron will pick it up automatically.',
+      currentTime: new Date().toISOString(),
+      timeUntilReminder: {
+        seconds: ((reminder.datetime - new Date()) / 1000).toFixed(0),
+        minutes: ((reminder.datetime - new Date()) / 60000).toFixed(2)
+      }
+    });
+  } catch (error) {
+    logger.error('Test reminder creation failed:', error.message);
+    res.status(500).json({
+      error: error.message,
+      stack: error.stack
     });
   }
 });
