@@ -480,41 +480,21 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
               });
             }
             
-            // If parsing failed, log the problem and ask user to clarify
+            // If parsing failed, actively ask user to clarify
             if (!reminderDateTime || typeof reminderDateTime !== 'string') {
-              logger.error('❌ Time parsing failed - using fallback:', {
+              logger.error('❌ Time parsing failed - asking user to clarify:', {
                 entities,
                 reason: 'Could not extract valid time'
               });
               
-              // Bug Fix: Use Kolkata time for fallback, not Vercel server local time (UTC)
-              const nowUtc = new Date();
-              let kYear = nowUtc.getUTCFullYear();
-              let kMonth = nowUtc.getUTCMonth() + 1; // 1-based
-              let kDay = nowUtc.getUTCDate();
-              let kHours = nowUtc.getUTCHours() + 5;
-              let kMinutes = nowUtc.getUTCMinutes() + 30 + 5; // Add 5 minutes for fallback
+              const lang = aiEngine.detectLanguage(processedMessage.text);
+              let errMsg = '';
+              if (lang === 'hindi') errMsg = '💭 माफ़ करना, मुझे समय समझ नहीं आया। क्या आप एक सटीक समय बता सकते हैं? (जैसे: शाम 4 बजे)';
+              else if (lang === 'hinglish') errMsg = '💭 Sorry, mujhe time samajh nahi aaya. Kya aap exact time bata sakte hain? (jaise: 4:00 PM)';
+              else errMsg = '💭 Sorry, I couldn\'t understand that time. Could you provide a specific time (like 4:00 PM)?';
               
-              // Handle minute/hour overflow
-              if (kMinutes >= 60) { kHours += 1; kMinutes -= 60; }
-              if (kHours >= 24) {
-                kHours -= 24;
-                kDay += 1;
-                const daysInKMonth = new Date(Date.UTC(kYear, kMonth, 0)).getUTCDate();
-                if (kDay > daysInKMonth) { kDay = 1; kMonth += 1; }
-                if (kMonth > 12) { kMonth = 1; kYear += 1; }
-              }
-
-              const monthStr = String(kMonth).padStart(2, '0');
-              const dayStr = String(kDay).padStart(2, '0');
-              const hourStr = String(kHours).padStart(2, '0');
-              const minuteStr = String(kMinutes).padStart(2, '0');
-              reminderDateTime = `${kYear}-${monthStr}-${dayStr}T${hourStr}:${minuteStr}:00+05:30`;
-              
-              logger.warn('⚠️ Using IST fallback reminder time (5 mins from now):', {
-                fallbackTime: reminderDateTime,
-                entities: JSON.stringify(entities)
-              });
+              await whatsappService.sendMessage(rawMessage.from, errMsg);
+              return { success: false, incomplete: true, error: 'Could not parse time string' };
             }
             
             const reminder = await ReminderService.createReminder(user._id, {

@@ -92,11 +92,10 @@ export function parseTimeInKolkata(timeStr) {
       console.log('✅ Time extracted:', { input: timeStr, hour, minute, hasAMPM: !!ampmStr });
     }
 
-    // If no time found, use default 9 AM (but log this!)
+    // If no time found, return null instead of using default 9 AM
     if (hour === null) {
-      console.warn('⚠️ No time found in string, using default 9 AM:', { input: timeStr });
-      hour = 9;
-      minute = 0;
+      console.warn('⚠️ No time found in string, returning null:', { input: timeStr });
+      return null;
     }
 
     // Determine target date
