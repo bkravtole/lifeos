@@ -25,6 +25,9 @@ export class IntentRouter {
 
         case 'UPDATE_ROUTINE':
           return await handlers.routineService?.updateRoutine(entities);
+          
+        case 'DELETE_ROUTINE':
+          return await handlers.routineService?.deleteRoutine(entities);
 
         case 'QUERY_ROUTINE':
           return await handlers.routineService?.queryRoutine(entities);
@@ -58,6 +61,7 @@ export class IntentRouter {
       'DELETE_REMINDER': 2,
       'LOG_ACTIVITY': 3,
       'UPDATE_ROUTINE': 4,
+      'DELETE_ROUTINE': 4,
       'CHAT': 5,
       'QUERY_ROUTINE': 6
     };

@@ -538,8 +538,23 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
         },
         updateReminder: async (entities) => {
           try {
-            const reminder = await ReminderService.updateReminder(entities.reminderId, entities);
-            return { success: true, data: reminder };
+            const activity = entities.activity?.toLowerCase() || '';
+            if (activity && activity !== 'reminder' && activity !== 'null') {
+              const reminders = await ReminderService.getActiveReminders(user._id);
+              const match = reminders.find(r => r.title.toLowerCase().includes(activity));
+              if (match) {
+                const updateData = {};
+                if (entities.datetime && entities.datetime !== 'null') updateData.datetime = parseTimeToDateTime(entities.datetime) || entities.datetime;
+                if (entities.time && entities.time !== 'null') updateData.datetime = parseTimeToDateTime(entities.time) || entities.time;
+                
+                if (Object.keys(updateData).length === 0) {
+                  return { success: false, incomplete: true, error: 'nothing_to_update' };
+                }
+                const reminder = await ReminderService.updateReminder(match._id, updateData);
+                return { success: true, updated: match.title, data: reminder };
+              }
+            }
+            return { success: false, error: 'Could not find a matching reminder to update.' };
           } catch (error) {
             logger.error('Failed to update reminder:', error.message);
             return { success: false };
@@ -547,8 +562,24 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
         },
         deleteReminder: async (entities) => {
           try {
-            await ReminderService.deleteReminder(entities.reminderId);
-            return { success: true };
+            const activity = entities.activity?.toLowerCase() || '';
+            const isAll = activity.includes('all') || activity === 'everything' || activity === 'sab';
+            
+            if (isAll) {
+              const reminders = await ReminderService.getActiveReminders(user._id);
+              for (const r of reminders) {
+                await ReminderService.deleteReminder(r._id);
+              }
+              return { success: true, deleted: 'all reminders' };
+            } else if (activity && activity !== 'reminder' && activity !== 'null') {
+              const reminders = await ReminderService.getActiveReminders(user._id);
+              const match = reminders.find(r => r.title.toLowerCase().includes(activity));
+              if (match) {
+                await ReminderService.deleteReminder(match._id);
+                return { success: true, deleted: match.title };
+              }
+            }
+            return { success: false, error: 'Could not find a matching reminder to delete.' };
           } catch (error) {
             logger.error('Failed to delete reminder:', error.message);
             return { success: false };
@@ -644,10 +675,50 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
         },
         updateRoutine: async (entities) => {
           try {
-            const routine = await RoutineService.updateRoutine(entities.routineId, entities);
-            return { success: true, data: routine };
+            const activity = entities.activity?.toLowerCase() || '';
+            if (activity && activity !== 'routine' && activity !== 'null') {
+              const routines = await RoutineService.getUserRoutines(user._id);
+              const match = routines.find(r => r.activity.toLowerCase().includes(activity));
+              if (match) {
+                const updateData = {};
+                if (entities.time && entities.time !== 'null') updateData.time = entities.time;
+                if (entities.schedule) updateData.schedule = entities.schedule;
+                
+                if (Object.keys(updateData).length === 0) {
+                  return { success: false, incomplete: true, error: 'nothing_to_update' };
+                }
+                const routine = await RoutineService.updateRoutine(match._id, updateData);
+                return { success: true, updated: match.activity, data: routine };
+              }
+            }
+            return { success: false, error: 'Could not find a matching routine to update.' };
           } catch (error) {
             logger.error('Failed to update routine:', error.message);
+            return { success: false };
+          }
+        },
+        deleteRoutine: async (entities) => {
+          try {
+            const activity = entities.activity?.toLowerCase() || '';
+            const isAll = activity.includes('all') || activity === 'everything' || activity === 'sab';
+            
+            if (isAll) {
+              const routines = await RoutineService.getUserRoutines(user._id);
+              for (const r of routines) {
+                await RoutineService.deleteRoutine(r._id);
+              }
+              return { success: true, deleted: 'all routines' };
+            } else if (activity && activity !== 'routine' && activity !== 'null') {
+              const routines = await RoutineService.getUserRoutines(user._id);
+              const match = routines.find(r => r.activity.toLowerCase().includes(activity));
+              if (match) {
+                await RoutineService.deleteRoutine(match._id);
+                return { success: true, deleted: match.activity };
+              }
+            }
+            return { success: false, error: 'Could not find a matching routine to delete.' };
+          } catch (error) {
+            logger.error('Failed to delete routine:', error.message);
             return { success: false };
           }
         },

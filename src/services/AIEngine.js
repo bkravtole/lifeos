@@ -56,8 +56,12 @@ INTENT DEFINITIONS:
 - QUERY_REMINDERS: User wants to see their list of reminders (keywords: "what are my reminders", "show reminders", "daily reminder list", "list of reminders")
 - LOG_ACTIVITY: User logs a completed activity (keywords: "done", "completed", "finished", "logged", "tracked")
 - CREATE_ROUTINE: User creates a daily/weekly/monthly routine (keywords: "every day", "daily routine", "daily", "weekly")
+- UPDATE_REMINDER: User wants to change a reminder (keywords: "update reminder", "change reminder for")
+- DELETE_REMINDER: User wants to delete a reminder (keywords: "delete reminder", "remove all reminders", "cancel")
+- UPDATE_ROUTINE: User wants to change a routine (keywords: "update routine", "change routine")
+- DELETE_ROUTINE: User wants to delete a routine (keywords: "delete routine", "stop routine")
 - CHAT: General conversation, question, or unclear intent
-- Other intents: DELETE_REMINDER, UPDATE_ROUTINE, QUERY_ROUTINE, CREATE_CLIENT, LOG_INVOICE, SCHEDULE_MEETING, LOG_LEAD, CREATE_PROJECT
+- Other intents: CREATE_CLIENT, LOG_INVOICE, SCHEDULE_MEETING, LOG_LEAD, CREATE_PROJECT
 
 EXAMPLES:
 - "Set a reminder to call my brother at 6:55 pm today" → CREATE_REMINDER, activity: "call my brother", time: "6:55 pm today"
@@ -68,7 +72,7 @@ EXAMPLES:
 
 Return ONLY valid JSON (no markdown, no code blocks):
 {
-  "intent": "CREATE_REMINDER|LOG_ACTIVITY|CHAT|QUERY_ROUTINE|DELETE_REMINDER|UPDATE_ROUTINE|CREATE_ROUTINE|QUERY_REMINDERS|CREATE_CLIENT|LOG_INVOICE|SCHEDULE_MEETING|LOG_LEAD|CREATE_PROJECT",
+  "intent": "CREATE_REMINDER|LOG_ACTIVITY|CHAT|QUERY_ROUTINE|DELETE_REMINDER|UPDATE_REMINDER|UPDATE_ROUTINE|DELETE_ROUTINE|CREATE_ROUTINE|QUERY_REMINDERS|CREATE_CLIENT|LOG_INVOICE|SCHEDULE_MEETING|LOG_LEAD|CREATE_PROJECT",
   "confidence": 0.90,
   "activity": "what user wants to do",
   "time": "when user wants to do it (extract from message)",
@@ -86,6 +90,10 @@ INTENT परिभाषाएं:
 - QUERY_REMINDERS: User अपने reminder देखना चाहता है (शब्द: "mere reminders", "show reminders", "daily reminder list")
 - LOG_ACTIVITY: किया हुआ काम दर्ज करना (शब्द: "done", "किया", "complete", "finished")
 - CREATE_ROUTINE: दैनिक/साप्ताहिक routine बनाना (शब्द: "हर दिन", "रोज़", "daily", "weekly")
+- UPDATE_REMINDER: Reminder बदलना (शब्द: "update reminder", "change reminder for")
+- DELETE_REMINDER: Reminder हटाना (शब्द: "delete reminder", "remove all reminders", "cancel")
+- UPDATE_ROUTINE: Routine बदलना (शब्द: "update routine", "change routine")
+- DELETE_ROUTINE: Routine हटाना (शब्द: "delete routine", "stop routine")
 - CHAT: सामान्य बातचीत
 
 उदाहरण:
@@ -97,7 +105,7 @@ INTENT परिभाषाएं:
 
 केवल JSON लौटाओ:
 {
-  "intent": "CREATE_REMINDER|LOG_ACTIVITY|CHAT|QUERY_ROUTINE|DELETE_REMINDER|UPDATE_ROUTINE|CREATE_ROUTINE|QUERY_REMINDERS|CREATE_CLIENT|LOG_INVOICE|SCHEDULE_MEETING|LOG_LEAD|CREATE_PROJECT",
+  "intent": "CREATE_REMINDER|LOG_ACTIVITY|CHAT|QUERY_ROUTINE|DELETE_REMINDER|UPDATE_REMINDER|UPDATE_ROUTINE|DELETE_ROUTINE|CREATE_ROUTINE|QUERY_REMINDERS|CREATE_CLIENT|LOG_INVOICE|SCHEDULE_MEETING|LOG_LEAD|CREATE_PROJECT",
   "confidence": 0.90,
   "activity": "क्या करना है",
   "time": "कब करना है",
@@ -114,6 +122,10 @@ INTENT DEFINITIONS:
 - QUERY_REMINDERS: User ko apne reminders dekhne hain (keywords: "mere reminders", "show reminders", "kya reminders list")
 - LOG_ACTIVITY: Activity complete karna (keywords: "done", "kiya", "complete", "finished")
 - CREATE_ROUTINE: Daily/weekly routine banao (keywords: "har din", "roz", "daily", "weekly")
+- UPDATE_REMINDER: Reminder change karna (keywords: "update reminder", "change reminder for")
+- DELETE_REMINDER: Reminder delete karna (keywords: "delete reminder", "remove all reminders", "cancel")
+- UPDATE_ROUTINE: Routine change karna (keywords: "update routine", "change routine")
+- DELETE_ROUTINE: Routine delete karna (keywords: "delete routine", "stop routine")
 - CHAT: General baat cheet
 
 Examples:
@@ -125,7 +137,7 @@ Examples:
 
 Return ONLY JSON:
 {
-  "intent": "CREATE_REMINDER|LOG_ACTIVITY|CHAT|QUERY_ROUTINE|DELETE_REMINDER|UPDATE_ROUTINE|CREATE_ROUTINE|QUERY_REMINDERS|CREATE_CLIENT|LOG_INVOICE|SCHEDULE_MEETING|LOG_LEAD|CREATE_PROJECT",
+  "intent": "CREATE_REMINDER|LOG_ACTIVITY|CHAT|QUERY_ROUTINE|DELETE_REMINDER|UPDATE_REMINDER|UPDATE_ROUTINE|DELETE_ROUTINE|CREATE_ROUTINE|QUERY_REMINDERS|CREATE_CLIENT|LOG_INVOICE|SCHEDULE_MEETING|LOG_LEAD|CREATE_PROJECT",
   "confidence": 0.90,
   "activity": "kya karna hai",
   "time": "kab karna hai",
@@ -322,14 +334,30 @@ Return ONLY JSON:
         }
       }
 
-      if (intent === 'DELETE_REMINDER') {
-        if (lang === 'hindi') {
-          return `✅ जैसे चाहो! मैंने उस रिमाइंडर को डिलीट कर दिया। 🗑️`;
-        } else if (lang === 'hinglish') {
-          return `✅ Bilkul! Maine us reminder ko delete kar diya. 🗑️`;
-        } else {
-          return `✅ Done! I've deleted that reminder. 🗑️`;
+      if (intent === 'DELETE_REMINDER' || intent === 'DELETE_ROUTINE') {
+        if (routeResult?.success === false) {
+          if (lang === 'hindi') return `❌ मुझे डिलीट करने के लिए वह नहीं मिला।`;
+          if (lang === 'hinglish') return `❌ Mujhe delete karne ke liye wo nahi mila.`;
+          return `❌ I couldn't find a matching item to delete.`;
         }
+        
+        const deletedItem = routeResult?.deleted || 'it';
+        if (lang === 'hindi') return `✅ जैसे चाहो! मैंने **${deletedItem}** को डिलीट कर दिया। 🗑️`;
+        if (lang === 'hinglish') return `✅ Bilkul! Maine **${deletedItem}** ko delete kar diya. 🗑️`;
+        return `✅ Done! I've deleted **${deletedItem}**. 🗑️`;
+      }
+      
+      if (intent === 'UPDATE_REMINDER' || intent === 'UPDATE_ROUTINE') {
+        if (routeResult?.success === false) {
+          if (lang === 'hindi') return `❌ मुझे अपडेट करने के लिए वह नहीं मिला।`;
+          if (lang === 'hinglish') return `❌ Mujhe update karne ke liye wo nahi mila.`;
+          return `❌ I couldn't find a matching item to update.`;
+        }
+        
+        const updatedItem = routeResult?.updated || 'it';
+        if (lang === 'hindi') return `✅ डन! मैंने **${updatedItem}** को अपडेट कर दिया है। 🔄`;
+        if (lang === 'hinglish') return `✅ Done! Maine **${updatedItem}** ko update kar diya. 🔄`;
+        return `✅ You got it! I've updated **${updatedItem}**. 🔄`;
       }
 
       // For CHAT and other intents, use AI-generated response
