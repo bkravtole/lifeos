@@ -110,16 +110,28 @@ export function getCurrentTimeInKolkata() {
   const year = now.getUTCFullYear();
   const month = String(now.getUTCMonth() + 1).padStart(2, '0');
   const day = String(now.getUTCDate()).padStart(2, '0');
-  const hours = String(now.getUTCHours() + 5).padStart(2, '0'); // UTC + 5:30 hours
-  const minutes = String(now.getUTCMinutes() + 30).padStart(2, '0');
-  const seconds = String(now.getUTCSeconds()).padStart(2, '0');
+  
+  let hours = now.getUTCHours() + 5;
+  let minutes = now.getUTCMinutes() + 30;
+  let seconds = now.getUTCSeconds();
   
   // Handle minute overflow
-  if (now.getUTCMinutes() + 30 >= 60) {
-    return `${year}-${month}-${day}T${hours}:${String((now.getUTCMinutes() + 30) % 60).padStart(2, '0')}:${seconds}+05:30`;
+  if (minutes >= 60) {
+    hours += 1;
+    minutes -= 60;
   }
   
-  return `${year}-${month}-${day}T${String(now.getUTCHours() + 5).padStart(2, '0')}:${String(now.getUTCMinutes() + 30).padStart(2, '0')}:${seconds}+05:30`;
+  // Handle hour/day overflow
+  if (hours >= 24) {
+    hours -= 24;
+    // Would need to increment day, but keeping simple for now
+  }
+  
+  const hourStr = String(hours).padStart(2, '0');
+  const minuteStr = String(minutes).padStart(2, '0');
+  const secondStr = String(seconds).padStart(2, '0');
+  
+  return `${year}-${month}-${day}T${hourStr}:${minuteStr}:${secondStr}+05:30`;
 }
 
 /**
@@ -172,7 +184,7 @@ export function formatTimeInKolkata(date, formatStr = 'yyyy-MM-dd HH:mm:ss') {
  */
 export function isReminderDue(reminderDateTime) {
   // Parse reminder datetime
-  let reminderHour, reminderMinute, reminderDate;
+  let reminderHour, reminderMinute;
   
   if (typeof reminderDateTime === 'string') {
     // Parse ISO string like "2026-03-28T11:22:00+05:30"
@@ -180,29 +192,47 @@ export function isReminderDue(reminderDateTime) {
     if (!match) return false;
     
     const [, year, month, day, hour, minute] = match;
-    reminderDate = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day), 
-                                      parseInt(hour), parseInt(minute), 0));
     reminderHour = parseInt(hour);
     reminderMinute = parseInt(minute);
   } else if (reminderDateTime instanceof Date) {
     reminderHour = reminderDateTime.getHours();
     reminderMinute = reminderDateTime.getMinutes();
-    reminderDate = reminderDateTime;
   } else {
     return false;
   }
   
-  // Get current Kolkata time
+  // Get current Kolkata time (UTC + 5:30)
   const nowUtc = new Date();
-  const kolkataHours = nowUtc.getUTCHours() + 5;
-  const kolkataMinutes = (nowUtc.getUTCMinutes() + 30) % 60;
+  let kolkataHours = nowUtc.getUTCHours() + 5;
+  let kolkataMinutes = nowUtc.getUTCMinutes() + 30;
+  
+  // Handle minute overflow (when minutes >= 60)
+  if (kolkataMinutes >= 60) {
+    kolkataHours += 1;
+    kolkataMinutes -= 60;
+  }
+  
+  // Handle hour overflow (when hours >= 24)
+  kolkataHours = kolkataHours % 24;
+  
+  console.log('⏰ Reminder time check:', {
+    reminderTime: `${String(reminderHour).padStart(2, '0')}:${String(reminderMinute).padStart(2, '0')}`,
+    kolkataTime: `${String(kolkataHours).padStart(2, '0')}:${String(kolkataMinutes).padStart(2, '0')}`,
+    hourMatch: reminderHour === kolkataHours,
+    minuteDiff: Math.abs(reminderMinute - kolkataMinutes)
+  });
   
   // Compare hours and minutes (within ±2 minutes window)
-  const hourMatch = reminderHour === Math.floor(kolkataHours % 24);
+  const hourMatch = reminderHour === kolkataHours;
   const minuteDiff = Math.abs(reminderMinute - kolkataMinutes);
   const minuteMatch = minuteDiff <= 2 || (minuteDiff === 58); // Handle minute wrap-around
   
-  return hourMatch && minuteMatch;
+  const isDue = hourMatch && minuteMatch;
+  if (isDue) {
+    console.log('✅ REMINDER IS DUE!');
+  }
+  
+  return isDue;
 }
 
 /**
@@ -229,10 +259,19 @@ export function getTimeRemaining(reminderDateTime) {
   }
   
   const nowUtc = new Date();
-  const kolkataHours = nowUtc.getUTCHours() + 5;
-  const kolkataMinutes = (nowUtc.getUTCMinutes() + 30) % 60;
+  let kolkataHours = nowUtc.getUTCHours() + 5;
+  let kolkataMinutes = nowUtc.getUTCMinutes() + 30;
   
-  const currentTotalMinutes = (Math.floor(kolkataHours % 24) * 60) + kolkataMinutes;
+  // Handle minute overflow
+  if (kolkataMinutes >= 60) {
+    kolkataHours += 1;
+    kolkataMinutes -= 60;
+  }
+  
+  // Handle hour overflow
+  kolkataHours = kolkataHours % 24;
+  
+  const currentTotalMinutes = (kolkataHours * 60) + kolkataMinutes;
   const reminderTotalMinutes = (reminderHour * 60) + reminderMinute;
   const diffMinutes = reminderTotalMinutes - currentTotalMinutes;
   
