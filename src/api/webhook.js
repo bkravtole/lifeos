@@ -435,7 +435,6 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
             logger.info('✅ Contextual Merge Success (Routine):', { merged: mergedEntities });
          }
       }
-
       // Override intent if name update pattern matched
       if (updateNameMatch) {
          aiResult.intent = 'UPDATE_NAME';
