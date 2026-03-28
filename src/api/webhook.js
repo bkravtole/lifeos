@@ -685,4 +685,73 @@ router.post('/test', (req, res) => {
   });
 });
 
+/**
+ * GET /webhook/debug/reminders
+ * Debug endpoint to check what reminders exist in database
+ */
+router.get('/debug/reminders', async (req, res) => {
+  try {
+    await connectDB();
+    
+    const Reminder = require('../models/Reminder.js').default;
+    const reminders = await Reminder.find({}).populate('userId', 'name phone').lean();
+    
+    const now = new Date();
+    const reminderStats = reminders.map(r => ({
+      id: r._id,
+      title: r.title,
+      description: r.description,
+      datetime: r.datetime,
+      notified: r.notified,
+      status: r.status,
+      repeat: r.repeat,
+      priority: r.priority,
+      user: r.userId ? { _id: r.userId._id, name: r.userId.name, phone: r.userId.phone } : null,
+      minutesDifference: ((now - new Date(r.datetime)) / 60000).toFixed(2),
+      isWithinWindow: ((now - new Date(r.datetime)) / 60000) >= -2 && ((now - new Date(r.datetime)) / 60000) <= 1
+    }));
+
+    res.status(200).json({
+      currentTime: now.toISOString(),
+      totalReminders: reminders.length,
+      activeReminders: reminders.filter(r => r.status === 'active' && !r.notified).length,
+      reminders: reminderStats
+    });
+  } catch (error) {
+    logger.error('Debug endpoint error:', error.message);
+    res.status(500).json({
+      error: error.message,
+      stack: error.stack
+    });
+  }
+});
+
+/**
+ * GET /webhook/debug/trigger-status
+ * Check if the trigger-reminders endpoint can be called and runs properly
+ */
+router.get('/debug/trigger-status', async (req, res) => {
+  try {
+    await connectDB();
+    
+    res.status(200).json({
+      status: 'ready',
+      message: 'Cron trigger endpoint is ready',
+      endpoint: 'POST /webhook/trigger-reminders',
+      node_env: process.env.NODE_ENV,
+      onDemandSchedulerReady: !!onDemandScheduler,
+      timestamp: new Date().toISOString(),
+      instructions: [
+        'On Vercel: Use external cron service (cron-job.org, EasyCron) to POST to /api/webhook/trigger-reminders every 1-5 minutes',
+        'Locally: Run with "npm start" to start ReminderScheduler automatically',
+        'Test: POST /api/webhook/trigger-reminders to manually trigger reminder check'
+      ]
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: error.message
+    });
+  }
+});
+
 export default router;
