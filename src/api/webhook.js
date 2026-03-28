@@ -10,6 +10,8 @@ import RoutineService from '../services/RoutineService.js';
 import ActivityService from '../services/ActivityService.js';
 import OnboardingService from '../services/OnboardingService.js';
 import OnDemandScheduler from '../services/OnDemandScheduler.js';
+import GoalService from '../services/GoalService.js';
+import MemoryService from '../services/MemoryService.js';
 import User from '../models/User.js';
 import Reminder from '../models/Reminder.js';
 import logger from '../utils/logger.js';
@@ -882,6 +884,79 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
         }
       },
 
+      goalService: {
+        createGoal: async (entities) => {
+          try {
+            const goalTitle = entities.activity || entities.goal || '';
+            if (!goalTitle || goalTitle === 'goal' || goalTitle === 'null') {
+              const lang = aiEngine.detectLanguage(processedMessage.text);
+              let msg = '🤔 What goal do you want to achieve? Tell me more!';
+              if (lang === 'hindi' || lang === 'hinglish') msg = '🤔 Aap kaisa goal achieve karna chahte hain? Mujhe batao!';
+              await whatsappService.sendMessage(rawMessage.from, msg);
+              return { success: false, incomplete: true };
+            }
+
+            const deadline = entities.time || entities.deadline || null;
+
+            // 1. Create goal
+            const goal = await GoalService.createGoal(user._id, {
+              title: goalTitle,
+              deadline
+            });
+
+            // 2. AI breakdown
+            const breakdown = await aiEngine.generateGoalBreakdown(goalTitle, deadline);
+
+            // 3. Set sub-tasks on goal
+            await GoalService.setSubTasks(goal._id, breakdown.subTasks);
+
+            // 4. Convert sub-tasks to actual reminders/routines
+            const result = await GoalService.convertSubTasksToActions(user._id, goal._id);
+
+            // 5. Build summary for user
+            let taskList = breakdown.subTasks.map((t, i) => 
+              `${i + 1}. ${t.type === 'routine' ? '🔄' : '⏰'} ${t.title} @ ${t.time}`
+            ).join('\n');
+
+            return { 
+              success: true, 
+              data: { 
+                goal: result.goal,
+                taskList,
+                routinesCreated: result.routines,
+                remindersCreated: result.reminders 
+              } 
+            };
+          } catch (error) {
+            logger.error('Failed to create goal:', error.message);
+            return { success: false, error: error.message };
+          }
+        },
+        queryGoals: async () => {
+          try {
+            const goals = await GoalService.getUserGoals(user._id);
+            if (goals.length === 0) {
+              return { success: true, data: { formatted: '', count: 0 } };
+            }
+
+            let formatted = `🎯 Your Goals (${goals.length})\n`;
+            for (const goal of goals) {
+              const progressBar = '█'.repeat(Math.floor(goal.progress / 10)) + '░'.repeat(10 - Math.floor(goal.progress / 10));
+              formatted += `\n📌 **${goal.title}**\n   ${progressBar} ${goal.progress}%`;
+              if (goal.subTasks.length > 0) {
+                const done = goal.subTasks.filter(t => t.status === 'completed').length;
+                formatted += ` (${done}/${goal.subTasks.length} tasks)`;
+              }
+            }
+
+            return { success: true, data: { formatted, count: goals.length } };
+          } catch (error) {
+            logger.error('Failed to query goals:', error.message);
+            return { success: false };
+          }
+        }
+      },
+
       userService: {
         updateName: async (entities) => {
           try {
@@ -1114,6 +1189,7 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
     let responseText;
     try {
       // Include user profile in context for personalization
+      const memoryContext = await MemoryService.buildMemoryContext(user._id);
       const contextWithProfile = {
         ...context.context,
         userProfile: {
@@ -1124,7 +1200,8 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
           workSchedule: user.workSchedule,
           reminderPreferences: user.reminderPreferences,
           businessProfile: user.businessProfile
-        }
+        },
+        memoryContext
       };
 
       responseText = await aiEngine.generateResponse(

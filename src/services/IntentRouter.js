@@ -38,6 +38,12 @@ export class IntentRouter {
         case 'QUERY_REMINDERS':
           return await handlers.userService?.queryReminders(entities);
 
+        case 'CREATE_GOAL':
+          return await handlers.goalService?.createGoal(entities);
+
+        case 'QUERY_GOALS':
+          return await handlers.goalService?.queryGoals(entities);
+
         case 'CHAT':
           return await handlers.chatService?.chat(entities);
 
@@ -62,6 +68,8 @@ export class IntentRouter {
       'LOG_ACTIVITY': 3,
       'UPDATE_ROUTINE': 4,
       'DELETE_ROUTINE': 4,
+      'CREATE_GOAL': 3,
+      'QUERY_GOALS': 5,
       'CHAT': 5,
       'QUERY_ROUTINE': 6
     };

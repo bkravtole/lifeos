@@ -1,4 +1,5 @@
 import { Groq } from 'groq-sdk';
+import MemoryService from './MemoryService.js';
 import logger from '../utils/logger.js';
 
 /**
@@ -56,6 +57,8 @@ INTENT DEFINITIONS:
 - QUERY_REMINDERS: User wants to see their list of reminders (keywords: "what are my reminders", "show reminders", "daily reminder list", "list of reminders")
 - LOG_ACTIVITY: User logs a completed activity (keywords: "done", "completed", "finished", "logged", "tracked")
 - CREATE_ROUTINE: User creates a daily/weekly/monthly routine (keywords: "every day", "daily routine", "daily", "weekly")
+- CREATE_GOAL: User wants to achieve a goal and needs a plan (keywords: "goal", "target", "plan", "prepare", "achieve", "weight loss", "exam", "learn")
+- QUERY_GOALS: User wants to check goal progress (keywords: "my goals", "goal progress", "how am I doing")
 - UPDATE_REMINDER: User wants to change a reminder (keywords: "update reminder", "change reminder for")
 - DELETE_REMINDER: User wants to delete a reminder (keywords: "delete reminder", "remove all reminders", "cancel")
 - UPDATE_ROUTINE: User wants to change a routine (keywords: "update routine", "change routine")
@@ -72,7 +75,7 @@ EXAMPLES:
 
 Return ONLY valid JSON (no markdown, no code blocks):
 {
-  "intent": "CREATE_REMINDER|LOG_ACTIVITY|CHAT|QUERY_ROUTINE|DELETE_REMINDER|UPDATE_REMINDER|UPDATE_ROUTINE|DELETE_ROUTINE|CREATE_ROUTINE|QUERY_REMINDERS|CREATE_CLIENT|LOG_INVOICE|SCHEDULE_MEETING|LOG_LEAD|CREATE_PROJECT",
+  "intent": "CREATE_REMINDER|LOG_ACTIVITY|CHAT|QUERY_ROUTINE|DELETE_REMINDER|UPDATE_REMINDER|UPDATE_ROUTINE|DELETE_ROUTINE|CREATE_ROUTINE|QUERY_REMINDERS|CREATE_GOAL|QUERY_GOALS|CREATE_CLIENT|LOG_INVOICE|SCHEDULE_MEETING|LOG_LEAD|CREATE_PROJECT",
   "confidence": 0.90,
   "activity": "what user wants to do",
   "time": "when user wants to do it (extract from message)",
@@ -90,6 +93,8 @@ INTENT परिभाषाएं:
 - QUERY_REMINDERS: User अपने reminder देखना चाहता है (शब्द: "mere reminders", "show reminders", "daily reminder list")
 - LOG_ACTIVITY: किया हुआ काम दर्ज करना (शब्द: "done", "किया", "complete", "finished")
 - CREATE_ROUTINE: दैनिक/साप्ताहिक routine बनाना (शब्द: "हर दिन", "रोज़", "daily", "weekly")
+- CREATE_GOAL: लक्ष्य प्राप्त करना (शब्द: "goal", "target", "plan", "prepare", "लक्ष्य")
+- QUERY_GOALS: लक्ष्य की प्रगति देखना (शब्द: "मेरे goals", "progress")
 - UPDATE_REMINDER: Reminder बदलना (शब्द: "update reminder", "change reminder for")
 - DELETE_REMINDER: Reminder हटाना (शब्द: "delete reminder", "remove all reminders", "cancel")
 - UPDATE_ROUTINE: Routine बदलना (शब्द: "update routine", "change routine")
@@ -105,7 +110,7 @@ INTENT परिभाषाएं:
 
 केवल JSON लौटाओ:
 {
-  "intent": "CREATE_REMINDER|LOG_ACTIVITY|CHAT|QUERY_ROUTINE|DELETE_REMINDER|UPDATE_REMINDER|UPDATE_ROUTINE|DELETE_ROUTINE|CREATE_ROUTINE|QUERY_REMINDERS|CREATE_CLIENT|LOG_INVOICE|SCHEDULE_MEETING|LOG_LEAD|CREATE_PROJECT",
+  "intent": "CREATE_REMINDER|LOG_ACTIVITY|CHAT|QUERY_ROUTINE|DELETE_REMINDER|UPDATE_REMINDER|UPDATE_ROUTINE|DELETE_ROUTINE|CREATE_ROUTINE|QUERY_REMINDERS|CREATE_GOAL|QUERY_GOALS|CREATE_CLIENT|LOG_INVOICE|SCHEDULE_MEETING|LOG_LEAD|CREATE_PROJECT",
   "confidence": 0.90,
   "activity": "क्या करना है",
   "time": "कब करना है",
@@ -122,6 +127,8 @@ INTENT DEFINITIONS:
 - QUERY_REMINDERS: User ko apne reminders dekhne hain (keywords: "mere reminders", "show reminders", "kya reminders list")
 - LOG_ACTIVITY: Activity complete karna (keywords: "done", "kiya", "complete", "finished")
 - CREATE_ROUTINE: Daily/weekly routine banao (keywords: "har din", "roz", "daily", "weekly")
+- CREATE_GOAL: Goal achieve karna (keywords: "goal", "target", "plan", "prepare", "achieve")
+- QUERY_GOALS: Goal progress dekhna (keywords: "mere goals", "goal progress")
 - UPDATE_REMINDER: Reminder change karna (keywords: "update reminder", "change reminder for")
 - DELETE_REMINDER: Reminder delete karna (keywords: "delete reminder", "remove all reminders", "cancel")
 - UPDATE_ROUTINE: Routine change karna (keywords: "update routine", "change routine")
@@ -137,7 +144,7 @@ Examples:
 
 Return ONLY JSON:
 {
-  "intent": "CREATE_REMINDER|LOG_ACTIVITY|CHAT|QUERY_ROUTINE|DELETE_REMINDER|UPDATE_REMINDER|UPDATE_ROUTINE|DELETE_ROUTINE|CREATE_ROUTINE|QUERY_REMINDERS|CREATE_CLIENT|LOG_INVOICE|SCHEDULE_MEETING|LOG_LEAD|CREATE_PROJECT",
+  "intent": "CREATE_REMINDER|LOG_ACTIVITY|CHAT|QUERY_ROUTINE|DELETE_REMINDER|UPDATE_REMINDER|UPDATE_ROUTINE|DELETE_ROUTINE|CREATE_ROUTINE|QUERY_REMINDERS|CREATE_GOAL|QUERY_GOALS|CREATE_CLIENT|LOG_INVOICE|SCHEDULE_MEETING|LOG_LEAD|CREATE_PROJECT",
   "confidence": 0.90,
   "activity": "kya karna hai",
   "time": "kab karna hai",
@@ -360,6 +367,29 @@ Return ONLY JSON:
         return `✅ You got it! I've updated **${updatedItem}**. 🔄`;
       }
 
+      if (intent === 'CREATE_GOAL') {
+        const goalTitle = entities?.activity || entities?.goal || 'your goal';
+        const deadline = entities?.deadline || entities?.time || '';
+        
+        if (lang === 'hindi') {
+          return `🎯 शानदार लक्ष्य! मैंने "${goalTitle}" को सबटास्क में तोड़कर आपके लिए plan बनाया है!${deadline ? ' Deadline: ' + deadline : ''}\n\n📋 आपके daily reminders अभी set हो रहे हैं... ✅`;
+        } else if (lang === 'hinglish') {
+          return `🎯 Great goal! Maine "${goalTitle}" ko sub-tasks mein todke aapke liye plan banaya hai!${deadline ? ' Deadline: ' + deadline : ''}\n\n📋 Aapke daily reminders set ho rahe hain... ✅`;
+        } else {
+          return `🎯 Great goal! I've broken down "${goalTitle}" into actionable sub-tasks!${deadline ? ' Deadline: ' + deadline : ''}\n\n📋 Your daily reminders are being set up... ✅`;
+        }
+      }
+
+      if (intent === 'QUERY_GOALS') {
+        const formatted = routeResult?.data?.formatted || '';
+        if (!formatted) {
+          if (lang === 'hindi') return `📋 अभी आपका कोई active goal नहीं है। "Goal set karo" बोलो शुरू करने के लिए! 🎯`;
+          if (lang === 'hinglish') return `📋 Abhi aapka koi active goal nahi hai. "Goal set karo" bolo start karne ke liye! 🎯`;
+          return `📋 You don't have any active goals yet. Say "I want to achieve..." to create one! 🎯`;
+        }
+        return formatted;
+      }
+
       // For CHAT and other intents, use AI-generated response
       let profileContext = this._buildPersonalContext(userContext);
       let systemPrompt = '';
@@ -490,7 +520,7 @@ Respond naturally and warmly. Be concise (1-2 sentences). Don't list things.`;
   /**
    * Build personal context string for warmer responses
    */
-  _buildPersonalContext(userContext) {
+   _buildPersonalContext(userContext) {
     if (!userContext || !userContext.userProfile) {
       return '';
     }
@@ -538,6 +568,11 @@ Respond naturally and warmly. Be concise (1-2 sentences). Don't list things.`;
       context += `\n- Tone: Friendly, supportive, encouraging. Like a caring friend who gets them.`;
     }
 
+    // Add memory context (long-term learned behavior)
+    if (userContext.memoryContext) {
+      context += userContext.memoryContext;
+    }
+
     return context;
   }
 
@@ -565,6 +600,57 @@ Return JSON with parsed details.`;
     } catch (error) {
       logger.error('Parse user input failed:', error.message);
       return { raw: message };
+    }
+  }
+
+  /**
+   * Generate goal breakdown using AI
+   * Returns structured sub-tasks for a goal
+   */
+  async generateGoalBreakdown(goalTitle, deadline = null) {
+    try {
+      const deadlineContext = deadline ? `The deadline is: ${deadline}. Distribute tasks accordingly.` : 'No specific deadline. Create a sustainable daily plan.';
+      
+      const systemPrompt = `You are a productivity planner. Break down the user's goal into 3-7 actionable daily sub-tasks.
+
+Rules:
+- Each sub-task should be simple, actionable, and specific
+- Include a suggested time for each (morning/afternoon/evening with specific times)
+- Mark each as "routine" (daily repeated) or "reminder" (one-time)
+- Focus on realistic, bite-sized tasks
+${deadlineContext}
+
+Return ONLY valid JSON (no markdown, no code blocks):
+{
+  "subTasks": [
+    {
+      "title": "task name",
+      "type": "routine|reminder",
+      "time": "7:00 AM",
+      "schedule": "daily|once"
+    }
+  ],
+  "category": "fitness|study|work|health|wellness|general"
+}`;
+
+      const msgs = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `Break down this goal: "${goalTitle}"` }
+      ];
+
+      const response = await this._callGroqAPI(msgs);
+      const parsed = JSON.parse(response);
+      return parsed;
+    } catch (error) {
+      logger.error('Goal breakdown failed:', error.message);
+      // Fallback: return a simple generic breakdown
+      return {
+        subTasks: [
+          { title: `Work on: ${goalTitle}`, type: 'routine', time: '9:00 AM', schedule: 'daily' },
+          { title: `Review progress: ${goalTitle}`, type: 'routine', time: '8:00 PM', schedule: 'daily' }
+        ],
+        category: 'general'
+      };
     }
   }
 }

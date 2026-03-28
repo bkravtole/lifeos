@@ -1,6 +1,7 @@
  import ActivityLog from '../models/ActivityLog.js';
 import Routine from '../models/Routine.js';
 import RoutineService from './RoutineService.js';
+import MemoryService from './MemoryService.js';
 import logger from '../utils/logger.js';
 
 /**
@@ -41,6 +42,13 @@ export class ActivityService {
           }
         } catch (streakError) {
           logger.error('Failed to update routine streak from activity log:', streakError.message);
+        }
+
+        // Auto-learn habits from activity patterns
+        try {
+          await MemoryService.learnFromActivity(userId, activity, status);
+        } catch (memError) {
+          logger.error('Failed to learn from activity:', memError.message);
         }
       }
 

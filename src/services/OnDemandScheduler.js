@@ -1,6 +1,7 @@
 import ReminderService from './ReminderService.js';
 import RoutineService from './RoutineService.js';
 import ActivityService from './ActivityService.js';
+import MemoryService from './MemoryService.js';
 import WhatsAppService from './WhatsAppService.js';
 import logger from '../utils/logger.js';
 import { isReminderDue, getTimeRemaining, formatTimeInKolkata, getCurrentTimeInKolkata } from '../utils/timezone.js';
@@ -156,6 +157,36 @@ export class OnDemandScheduler {
           });
         }
       }
+
+      // --- NEW: Proactive Habit Nudges ---
+      try {
+        // Only check proactive nudges once every few hours per user to avoid spam
+        const lastNudgeCheck = this.lastCheckTime[`nudge_${userId}`] || 0;
+        const twelveHoursInMs = 12 * 60 * 60 * 1000;
+        
+        if (now - lastNudgeCheck > twelveHoursInMs) {
+          this.lastCheckTime[`nudge_${userId}`] = now;
+          
+          const missedHabits = await MemoryService.detectMissedHabits(userId);
+          if (missedHabits && missedHabits.length > 0) {
+            // Pick the highest confidence missed habit
+            const habitToNudge = missedHabits[0];
+            const userPhone = reminders.find(r => r.userId?._id?.toString() === userId.toString())?.userId?.phone;
+            
+            if (userPhone) {
+              logger.info('🧠 Sending proactive habit nudge:', { userId, habit: habitToNudge.activity });
+              await this.whatsappService.sendMessage(
+                userPhone,
+                `👀 Aaj ${habitToNudge.activity} skip kar rahe ho kya? (Just checking in!)`
+              );
+            }
+          }
+        }
+      } catch (nudgeError) {
+        logger.error('Failed to process proactive habit nudges:', nudgeError.message);
+      }
+      // --- END: Proactive Habit Nudges ---
+
     } catch (error) {
       logger.error('User reminder check failed:', error.message, error.stack);
     }
