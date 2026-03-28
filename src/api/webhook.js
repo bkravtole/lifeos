@@ -14,7 +14,7 @@ import User from '../models/User.js';
 import Reminder from '../models/Reminder.js';
 import logger from '../utils/logger.js';
 import { connectDB } from '../utils/database.js';
-import { parseTimeInKolkata, formatTimeInKolkata } from '../utils/timezone.js';
+import { parseTimeInKolkata, formatTimeInKolkata, getCurrentTimeInKolkata } from '../utils/timezone.js';
 
 const router = express.Router();
 let aiEngine, whatsappService, onDemandScheduler;
@@ -397,8 +397,17 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
             // Merge logic: fill in the blanks
             if (!mergedEntities.activity || mergedEntities.activity === 'none' || mergedEntities.activity === 'reminder') {
                mergedEntities.activity = processedMessage.text; // Use whole msg if activity was missing
-            } else if (!mergedEntities.datetime || mergedEntities.datetime === 'none') {
-               mergedEntities.datetime = processedMessage.text;
+            } else if (!mergedEntities.datetime || mergedEntities.datetime === 'none' || pendingAction.isPastTimeCorrection) {
+               // If it was a past time correction and they said "tomorrow", fix the date
+               if (pendingAction.isPastTimeCorrection && processedMessage.text.toLowerCase().includes('tomorrow')) {
+                  const oldDate = mergedEntities.datetime; // e.g. "2026-03-28T15:00:00+05:30"
+                  const dateObj = new Date(oldDate.replace('+05:30', 'Z')); // Temporary Z for math
+                  dateObj.setUTCDate(dateObj.getUTCDate() + 1);
+                  const newDate = dateObj.toISOString().replace('.000Z', '+05:30');
+                  mergedEntities.datetime = newDate;
+               } else {
+                  mergedEntities.datetime = processedMessage.text;
+               }
             }
             
             aiResult.intent = 'CREATE_REMINDER';
@@ -517,6 +526,38 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
                 source: entities.datetime ? 'datetime' : 'time'
               });
               reminderDateTime = parseTimeToDateTime(reminderDateTime);
+              
+              // NEW: Past-time validation
+              if (reminderDateTime) {
+                const now = getCurrentTimeInKolkata();
+                // Compare ISO strings (works because both are in same offset +05:30)
+                if (reminderDateTime < now) {
+                  const rawText = processedMessage.text.toLowerCase();
+                  const hasExplicitDate = rawText.includes('tomorrow') || rawText.includes('कल') || rawText.includes('next') || rawText.match(/\d{4}-\d{2}-\d{2}/);
+                  
+                  if (!hasExplicitDate) {
+                    logger.warn('⚠️ Past time detected for today - asking for date clarification');
+                    const lang = aiEngine.detectLanguage(processedMessage.text);
+                    let pastTimeMsg = '';
+                    
+                    if (lang === 'hindi' || lang === 'hinglish') {
+                      pastTimeMsg = '🤔 Yeh samay toh nikal gaya hai! Kya aap ise "kal" ke liye set karna chahte hain? Ya koi aur date?';
+                    } else {
+                      pastTimeMsg = '🤔 That time has already passed for today. Do you want to set this for "tomorrow" or a different date?';
+                    }
+                    
+                    await ContextEngine.setPendingAction(user._id, {
+                      intent: 'CREATE_REMINDER',
+                      entities: { activity, datetime: reminderDateTime },
+                      isPastTimeCorrection: true
+                    });
+                    
+                    await whatsappService.sendMessage(rawMessage.from, pastTimeMsg);
+                    return { success: false, incomplete: true, error: 'Past time' };
+                  }
+                }
+              }
+              
               logger.info('⏰ Time parsing result:', {
                 input: entities.datetime || entities.time,
                 parsed: reminderDateTime,
