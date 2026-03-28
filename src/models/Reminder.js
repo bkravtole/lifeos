@@ -14,9 +14,20 @@ const reminderSchema = new mongoose.Schema(
     },
     description: String,
     datetime: {
-      type: Date,
+      type: String,
       required: true,
-      index: true
+      index: true,
+      default: () => {
+        // Default to current Kolkata time
+        const now = new Date();
+        const year = now.getUTCFullYear();
+        const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(now.getUTCDate()).padStart(2, '0');
+        const hours = String(now.getUTCHours() + 5).padStart(2, '0');
+        const minutes = String((now.getUTCMinutes() + 30) % 60).padStart(2, '0');
+        const seconds = String(now.getUTCSeconds()).padStart(2, '0');
+        return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}+05:30`;
+      }
     },
     repeat: {
       type: String,

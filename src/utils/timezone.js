@@ -1,41 +1,14 @@
 const TIMEZONE = 'Asia/Kolkata';
-const KOLKATA_OFFSET_HOURS = 5.5; // IST is UTC+5:30
-
-/**
- * Get current time in Asia/Kolkata timezone
- * @returns {Date} - Current time representing Kolkata
- */
-export function getCurrentTimeInKolkata() {
-  const now = new Date();
-  const utcTime = new Date(now.getTime() + now.getTimezoneOffset() * 60000);
-  return new Date(utcTime.getTime() + KOLKATA_OFFSET_HOURS * 3600000);
-}
-
-/**
- * Convert UTC date to Asia/Kolkata timezone representation
- * @param {Date} utcDate - UTC date
- * @returns {Date} - Kolkata timezone representation
- */
-export function toKolkataTime(utcDate) {
-  return new Date(utcDate.getTime() + KOLKATA_OFFSET_HOURS * 3600000);
-}
-
-/**
- * Convert local Kolkata time to UTC for storage
- * Assumes the input Date is already in Kolkata local time
- * @param {Date} kolkataLocalTime - Local time in Kolkata
- * @returns {Date} - UTC date for storage
- */
-export function toUTC(kolkataLocalTime) {
-  return new Date(kolkataLocalTime.getTime() - KOLKATA_OFFSET_HOURS * 3600000);
-}
 
 /**
  * Parse time string in Asia/Kolkata timezone
- * Handles: "14:30", "2:30 PM", "00:15 AM", "tomorrow 9 AM", "9 AM today", etc.
+ * DIRECT STORAGE: No UTC conversion! Store times exactly as user specifies.
+ * Returns ISO string with +05:30 offset to represent Kolkata time explicitly.
+ * 
+ * Handles: "14:30", "2:30 PM", "11:06 AM", "tomorrow 9 AM", "9 AM today", etc.
  * 
  * @param {string} timeStr - Time input string
- * @returns {Date|null} - Parsed datetime in UTC (for storage) or null if invalid
+ * @returns {string|null} - ISO datetime with +05:30 offset (e.g., "2026-03-28T11:22:00+05:30") or null if invalid
  */
 export function parseTimeInKolkata(timeStr) {
   if (!timeStr || typeof timeStr !== 'string') {
@@ -43,14 +16,16 @@ export function parseTimeInKolkata(timeStr) {
   }
 
   try {
-    const now = getCurrentTimeInKolkata();
-    let targetDate = new Date(now);
+    const now = new Date();
+    let year = now.getFullYear();
+    let month = now.getMonth() + 1;
+    let day = now.getDate();
     let hour = null;
     let minute = 0;
     
     const lowerStr = timeStr.toLowerCase().trim();
 
-    // Extract time (handles "14:30", "14 30", "2:30", "00:15", etc)
+    // Extract time (handles "14:30", "14 30", "2:30", "00:15", "11:06", "2:30 PM", etc)
     const timeMatch = lowerStr.match(/(\d{1,2})\s*[:./]?\s*(\d{2})?\s*(am|pm|a\.m|p\.m)?/i);
     
     if (timeMatch) {
@@ -74,7 +49,7 @@ export function parseTimeInKolkata(timeStr) {
       }
     }
 
-    // If no time found, use default
+    // If no time found, use default 9 AM
     if (hour === null) {
       hour = 9;
       minute = 0;
@@ -82,20 +57,27 @@ export function parseTimeInKolkata(timeStr) {
 
     // Determine target date
     if (lowerStr.includes('tomorrow') || lowerStr.includes('कल') || lowerStr.includes('agle din')) {
-      targetDate.setDate(targetDate.getDate() + 1);
-      targetDate.setHours(hour, minute, 0, 0);
-    } else if (lowerStr.includes('today') || lowerStr.includes('आज') || lowerStr.includes('aaj')) {
-      // Today - set the time for today in Kolkata
-      targetDate.setHours(hour, minute, 0, 0);
-    } else {
-      // No date specified, assume today
-      targetDate.setHours(hour, minute, 0, 0);
+      day = day + 1;
+      // Handle month/year overflow
+      const daysInMonth = new Date(year, month, 0).getDate();
+      if (day > daysInMonth) {
+        day = 1;
+        month = month + 1;
+        if (month > 12) {
+          month = 1;
+          year = year + 1;
+        }
+      }
     }
 
-    // Convert Kolkata local time to UTC for storage
-    const utcTime = toUTC(targetDate);
+    // Format as ISO string with +05:30 offset (Kolkata timezone)
+    const monthStr = String(month).padStart(2, '0');
+    const dayStr = String(day).padStart(2, '0');
+    const hourStr = String(hour).padStart(2, '0');
+    const minuteStr = String(minute).padStart(2, '0');
     
-    return utcTime;
+    // Store with +05:30 offset to indicate Kolkata time (NO UTC conversion)
+    return `${year}-${monthStr}-${dayStr}T${hourStr}:${minuteStr}:00+05:30`;
   } catch (error) {
     console.error('Error parsing time in Kolkata timezone:', error.message);
     return null;
@@ -103,67 +85,158 @@ export function parseTimeInKolkata(timeStr) {
 }
 
 /**
- * Format a UTC date for display in Asia/Kolkata timezone
- * @param {Date} utcDate - UTC date from database
- * @param {string} formatStr - Format pattern (simplified: 'HH:mm:ss', 'yyyy-MM-dd HH:mm:ss', etc)
- * @returns {string} - Formatted time in Kolkata timezone
+ * Get current time in Asia/Kolkata (as ISO string with +05:30 offset)
+ * @returns {string} - ISO string with Kolkata offset
  */
-export function formatTimeInKolkata(utcDate, formatStr = 'yyyy-MM-dd HH:mm:ss') {
-  // Convert UTC to Kolkata time
-  const kolkataTime = toKolkataTime(utcDate);
+export function getCurrentTimeInKolkata() {
+  const now = new Date();
+  const year = now.getUTCFullYear();
+  const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(now.getUTCDate()).padStart(2, '0');
+  const hours = String(now.getUTCHours() + 5).padStart(2, '0'); // UTC + 5:30 hours
+  const minutes = String(now.getUTCMinutes() + 30).padStart(2, '0');
+  const seconds = String(now.getUTCSeconds()).padStart(2, '0');
   
-  // Simple formatting
-  const year = kolkataTime.getFullYear();
-  const month = String(kolkataTime.getMonth() + 1).padStart(2, '0');
-  const date = String(kolkataTime.getDate()).padStart(2, '0');
-  const hours = String(kolkataTime.getHours()).padStart(2, '0');
-  const minutes = String(kolkataTime.getMinutes()).padStart(2, '0');
-  const seconds = String(kolkataTime.getSeconds()).padStart(2, '0');
+  // Handle minute overflow
+  if (now.getUTCMinutes() + 30 >= 60) {
+    return `${year}-${month}-${day}T${hours}:${String((now.getUTCMinutes() + 30) % 60).padStart(2, '0')}:${seconds}+05:30`;
+  }
   
-  // Replace format placeholders
+  return `${year}-${month}-${day}T${String(now.getUTCHours() + 5).padStart(2, '0')}:${String(now.getUTCMinutes() + 30).padStart(2, '0')}:${seconds}+05:30`;
+}
+
+/**
+ * Format a date for display in Kolkata timezone
+ * @param {Date|string} date - Date to format or ISO string with +05:30 offset
+ * @param {string} formatStr - Format pattern ('HH:mm:ss', 'yyyy-MM-dd HH:mm:ss', etc)
+ * @returns {string} - Formatted time
+ */
+export function formatTimeInKolkata(date, formatStr = 'yyyy-MM-dd HH:mm:ss') {
+  let year, month, day, hours, minutes, seconds;
+  
+  if (typeof date === 'string') {
+    // Parse ISO string with +05:30 (e.g., "2026-03-28T11:22:00+05:30")
+    const match = date.match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+    if (match) {
+      [, year, month, day, hours, minutes, seconds] = match;
+    } else {
+      // Try to parse as Date
+      const d = new Date(date);
+      year = d.getFullYear();
+      month = String(d.getMonth() + 1).padStart(2, '0');
+      day = String(d.getDate()).padStart(2, '0');
+      hours = String(d.getHours()).padStart(2, '0');
+      minutes = String(d.getMinutes()).padStart(2, '0');
+      seconds = String(d.getSeconds()).padStart(2, '0');
+    }
+  } else if (date instanceof Date) {
+    year = date.getFullYear();
+    month = String(date.getMonth() + 1).padStart(2, '0');
+    day = String(date.getDate()).padStart(2, '0');
+    hours = String(date.getHours()).padStart(2, '0');
+    minutes = String(date.getMinutes()).padStart(2, '0');
+    seconds = String(date.getSeconds()).padStart(2, '0');
+  }
+  
   return formatStr
     .replace('yyyy', year)
     .replace('MM', month)
-    .replace('dd', date)
+    .replace('dd', day)
     .replace('HH', hours)
     .replace('mm', minutes)
     .replace('ss', seconds);
 }
 
 /**
- * Check if a reminder should be sent based on Kolkata time
- * More lenient: triggers 2 minutes before to 1 minute after reminder time
- * 
- * @param {Date} reminderDateTime - UTC reminder datetime from database
+ * Check if a reminder should be sent
+ * Triggers when within ±2 minutes of reminder time
+ * @param {string|Date} reminderDateTime - Reminder time (ISO string with +05:30 or Date object)
  * @returns {boolean} - Whether to send the reminder
  */
 export function isReminderDue(reminderDateTime) {
-  const nowUTC = new Date();
+  // Parse reminder datetime
+  let reminderHour, reminderMinute, reminderDate;
   
-  // Calculate difference in minutes
-  const diffInMs = nowUTC - reminderDateTime;
-  const diffInMinutes = diffInMs / 60000;
+  if (typeof reminderDateTime === 'string') {
+    // Parse ISO string like "2026-03-28T11:22:00+05:30"
+    const match = reminderDateTime.match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+    if (!match) return false;
+    
+    const [, year, month, day, hour, minute] = match;
+    reminderDate = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day), 
+                                      parseInt(hour), parseInt(minute), 0));
+    reminderHour = parseInt(hour);
+    reminderMinute = parseInt(minute);
+  } else if (reminderDateTime instanceof Date) {
+    reminderHour = reminderDateTime.getHours();
+    reminderMinute = reminderDateTime.getMinutes();
+    reminderDate = reminderDateTime;
+  } else {
+    return false;
+  }
   
-  // Send if within range: 2 minutes before to 1 minute after
-  return diffInMinutes >= -2 && diffInMinutes <= 1;
+  // Get current Kolkata time
+  const nowUtc = new Date();
+  const kolkataHours = nowUtc.getUTCHours() + 5;
+  const kolkataMinutes = (nowUtc.getUTCMinutes() + 30) % 60;
+  
+  // Compare hours and minutes (within ±2 minutes window)
+  const hourMatch = reminderHour === Math.floor(kolkataHours % 24);
+  const minuteDiff = Math.abs(reminderMinute - kolkataMinutes);
+  const minuteMatch = minuteDiff <= 2 || (minuteDiff === 58); // Handle minute wrap-around
+  
+  return hourMatch && minuteMatch;
 }
 
 /**
- * Get time difference for logging
- * @param {Date} reminderDateTime - UTC reminder datetime
+ * Get time remaining until reminder
+ * @param {string|Date} reminderDateTime - Reminder time (ISO string or Date)
  * @returns {string} - Human readable time difference
  */
 export function getTimeRemaining(reminderDateTime) {
-  const nowUTC = new Date();
-  const diffInMs = reminderDateTime - nowUTC;
+  let reminderHour, reminderMinute;
   
-  if (diffInMs < 0) {
-    const minutesPassed = Math.abs(diffInMs / 60000);
-    return `${minutesPassed.toFixed(0)} minutes ago`;
+  if (typeof reminderDateTime === 'string') {
+    const match = reminderDateTime.match(/(\d{2}):(\d{2}):(\d{2})/);
+    if (match) {
+      reminderHour = parseInt(match[1]);
+      reminderMinute = parseInt(match[2]);
+    } else {
+      return 'Invalid time';
+    }
+  } else if (reminderDateTime instanceof Date) {
+    reminderHour = reminderDateTime.getHours();
+    reminderMinute = reminderDateTime.getMinutes();
   } else {
-    const minutesRemaining = diffInMs / 60000;
-    return `${minutesRemaining.toFixed(0)} minutes remaining`;
+    return 'Invalid time';
   }
+  
+  const nowUtc = new Date();
+  const kolkataHours = nowUtc.getUTCHours() + 5;
+  const kolkataMinutes = (nowUtc.getUTCMinutes() + 30) % 60;
+  
+  const currentTotalMinutes = (Math.floor(kolkataHours % 24) * 60) + kolkataMinutes;
+  const reminderTotalMinutes = (reminderHour * 60) + reminderMinute;
+  const diffMinutes = reminderTotalMinutes - currentTotalMinutes;
+  
+  if (diffMinutes < -2) {
+    return `${Math.abs(diffMinutes)} minutes ago`;
+  } else if (diffMinutes > 2) {
+    return `${diffMinutes} minutes remaining`;
+  } else {
+    return 'NOW!';
+  }
+}
+
+/**
+ * Legacy compatibility functions (for existing code)
+ */
+export function toKolkataTime(date) {
+  return date; // No conversion needed - already in Kolkata time
+}
+
+export function toUTC(date) {
+  return date; // No conversion needed - already in Kolkata time
 }
 
 export default {

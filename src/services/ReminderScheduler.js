@@ -143,15 +143,15 @@ export class ReminderScheduler {
       return { sent: false, reason: `Not yet due (${timeRemaining})` };
     }
 
-    // **REPEATING REMINDERS**: Check time match in Kolkata timezone
+    // **REPEATING REMINDERS**: Check time match
     if (reminder.repeat === 'daily') {
       const reminderDate = new Date(reminder.datetime);
-      const targetHour = reminderDate.getUTCHours();
-      const targetMinute = reminderDate.getUTCMinutes();
+      const targetHour = reminderDate.getHours();
+      const targetMinute = reminderDate.getMinutes();
       
       const now = new Date();
-      const currentHour = now.getUTCHours();
-      const currentMinute = now.getUTCMinutes();
+      const currentHour = now.getHours();
+      const currentMinute = now.getMinutes();
 
       // Allow 1-minute window around target time
       if (currentHour === targetHour && Math.abs(currentMinute - targetMinute) <= 1) {
@@ -163,14 +163,14 @@ export class ReminderScheduler {
 
     if (reminder.repeat === 'weekly') {
       const reminderDate = new Date(reminder.datetime);
-      const targetDay = reminderDate.getUTCDay();
-      const targetHour = reminderDate.getUTCHours();
-      const targetMinute = reminderDate.getUTCMinutes();
+      const targetDay = reminderDate.getDay();
+      const targetHour = reminderDate.getHours();
+      const targetMinute = reminderDate.getMinutes();
       
       const now = new Date();
-      const currentDay = now.getUTCDay();
-      const currentHour = now.getUTCHours();
-      const currentMinute = now.getUTCMinutes();
+      const currentDay = now.getDay();
+      const currentHour = now.getHours();
+      const currentMinute = now.getMinutes();
 
       if (currentDay === targetDay && currentHour === targetHour && Math.abs(currentMinute - targetMinute) <= 1) {
         return await this.sendReminder(reminder);

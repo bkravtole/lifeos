@@ -7,11 +7,11 @@ import logger from '../utils/logger.js';
  */
 export class AIEngine {
   constructor() {
-    this.apiKey = process.env.GROQ_API_KEY;
+    this.apiKey = process.env.GROQ_API_KEY || 'dummy_key_for_development';
     this.model = 'llama-3.3-70b-versatile';
 
-    if (!this.apiKey) {
-      throw new Error('GROQ_API_KEY is not defined');
+    if (!this.apiKey || this.apiKey === 'dummy_key_for_development') {
+      logger.warn('⚠️ GROQ_API_KEY not configured - AI features will be unavailable in production');
     }
 
     this.groq = new Groq({

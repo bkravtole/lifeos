@@ -11,6 +11,7 @@ import ActivityService from '../services/ActivityService.js';
 import OnboardingService from '../services/OnboardingService.js';
 import OnDemandScheduler from '../services/OnDemandScheduler.js';
 import User from '../models/User.js';
+import Reminder from '../models/Reminder.js';
 import logger from '../utils/logger.js';
 import { connectDB } from '../utils/database.js';
 import { parseTimeInKolkata, formatTimeInKolkata } from '../utils/timezone.js';
@@ -24,15 +25,17 @@ try {
   whatsappService = new whatsapp();
   onDemandScheduler = new OnDemandScheduler();
 } catch (error) {
+  console.error('🔴 SERVICE INIT ERROR:', error);
   logger.error('Failed to initialize services:', error.message);
+  logger.error('Full error object:', JSON.stringify(error, null, 2));
 }
 
 /**
- * Parse time string to DateTime using Asia/Kolkata timezone
+ * Parse time string to DateTime using Asia/Kolkata timezone (NO UTC conversion!)
  * Handles formats like "09:00", "9 AM", "2:30 PM", "tomorrow 3 PM", "10:43 AM today", etc.
  * 
  * @param {string} timeStr - Time input string
- * @returns {Date|null} - Parsed datetime in UTC (for database storage) or null if invalid
+ * @returns {string|null} - ISO datetime with +05:30 offset (e.g., "2026-03-28T11:22:00+05:30") or null if invalid
  */
 function parseTimeToDateTime(timeStr) {
   if (!timeStr || typeof timeStr !== 'string') {
@@ -41,22 +44,22 @@ function parseTimeToDateTime(timeStr) {
   }
 
   try {
-    const parsedUTC = parseTimeInKolkata(timeStr);
+    const parsedTime = parseTimeInKolkata(timeStr);
     
-    if (!parsedUTC) {
+    if (!parsedTime) {
       logger.warn('Could not parse time string:', { input: timeStr });
       return null;
     }
 
     // Log for debugging
-    const displayTime = formatTimeInKolkata(parsedUTC, 'yyyy-MM-dd HH:mm:ss');
-    logger.info('✅ Time parsed in Asia/Kolkata timezone:', {
+    const displayTime = formatTimeInKolkata(parsedTime, 'yyyy-MM-dd HH:mm:ss');
+    logger.info('✅ Time parsed in Asia/Kolkata timezone (NO UTC):', {
       input: timeStr,
-      storedAsUTC: parsedUTC.toISOString(),
-      displayInKolkata: displayTime + ' (Asia/Kolkata)'
+      storedInDB: parsedTime,
+      displayTime: displayTime
     });
 
-    return parsedUTC;
+    return parsedTime;
   } catch (error) {
     logger.error('Error parsing time:', { error: error.message, input: timeStr });
     return null;
@@ -90,6 +93,9 @@ const triggerRemindersHandler = async (req, res) => {
     await connectDB();
     
     logger.info('🔔 Manual reminder check triggered via webhook');
+    if (!onDemandScheduler) {
+      throw new Error('OnDemandScheduler not initialized - services initialization failed');
+    }
     await onDemandScheduler.checkAndSendAllDueReminders();
     
     res.status(200).json({
@@ -98,7 +104,7 @@ const triggerRemindersHandler = async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    logger.error('Failed to trigger reminder check:', error.message);
+    logger.error('Failed to trigger reminder check:', error.message, error.stack);
     res.status(500).json({
       success: false,
       error: error.message
@@ -355,17 +361,20 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
               reminderDateTime = parseTimeToDateTime(reminderDateTime);
               logger.debug('Parsed time:', {
                 input: entities.datetime || entities.time,
-                output: reminderDateTime ? reminderDateTime.toISOString() : null
+                output: reminderDateTime
               });
             }
             
-            // If still not a Date, use tomorrow at specified time
-            if (!(reminderDateTime instanceof Date)) {
-              reminderDateTime = new Date();
-              reminderDateTime.setDate(reminderDateTime.getDate() + 1);
-              reminderDateTime.setHours(9, 0, 0, 0);
+            // If still not a string (parsed time), use tomorrow at 9 AM
+            if (!reminderDateTime || typeof reminderDateTime !== 'string') {
+              const tomorrow = new Date();
+              tomorrow.setDate(tomorrow.getDate() + 1);
+              const year = tomorrow.getFullYear();
+              const month = String(tomorrow.getMonth() + 1).padStart(2, '0');
+              const day = String(tomorrow.getDate()).padStart(2, '0');
+              reminderDateTime = `${year}-${month}-${day}T09:00:00+05:30`;
               logger.warn('Using fallback reminder time (tomorrow 9 AM):', {
-                fallbackTime: reminderDateTime.toISOString()
+                fallbackTime: reminderDateTime
               });
             }
             
@@ -380,7 +389,7 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
             logger.info('✅ Reminder created:', { 
               reminderId: reminder._id, 
               title: reminder.title,
-              datetime: reminder.datetime.toISOString()
+              datetime: reminderDateTime
             });
             return { success: true, data: reminder };
           } catch (error) {
@@ -622,7 +631,6 @@ router.get('/debug/reminders', async (req, res) => {
   try {
     await connectDB();
     
-    const Reminder = require('../models/Reminder.js').default;
     const reminders = await Reminder.find({}).populate('userId', 'name phone').lean();
     
     const now = new Date();
@@ -720,11 +728,11 @@ router.post('/debug/test-reminder', async (req, res) => {
       userId,
       title,
       timeStr,
-      parsedDateTime: reminderDateTime.toISOString()
+      parsedDateTime: reminderDateTime
     });
 
     // Create reminder
-    const reminder = new (require('../models/Reminder.js').default)({
+    const reminder = new Reminder({
       userId,
       title,
       datetime: reminderDateTime,
@@ -740,7 +748,7 @@ router.post('/debug/test-reminder', async (req, res) => {
       reminder: {
         _id: reminder._id,
         title: reminder.title,
-        datetime: reminder.datetime.toISOString(),
+        datetime: reminder.datetime,
         status: reminder.status,
         notified: reminder.notified,
         createdAt: reminder.createdAt.toISOString()

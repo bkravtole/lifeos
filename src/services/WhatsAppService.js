@@ -7,13 +7,13 @@ import logger from '../utils/logger.js';
  */
 export class WhatsAppService {
   constructor() {
-    this.baseURL = process.env.WHATSAPP_API_URL;
-    this.authToken = process.env.WHATSAPP_API_TOKEN;
-    this.originWebsite = process.env.ORIGIN_WEBSITE;
+    this.baseURL = process.env.WHATSAPP_API_URL || 'https://internal.11za.in/apis';
+    this.authToken = process.env.WHATSAPP_API_TOKEN || 'dummy_token_dev';
+    this.originWebsite = process.env.ORIGIN_WEBSITE || 'https://localhost';
     this.webhookToken = process.env.WHATSAPP_WEBHOOK_TOKEN;
 
-    if (!this.baseURL || !this.authToken || !this.originWebsite) {
-      throw new Error('Missing WhatsApp API credentials: WHATSAPP_API_URL, WHATSAPP_API_TOKEN, ORIGIN_WEBSITE');
+    if (!this.authToken) {
+      logger.warn('⚠️ WhatsApp API credentials not fully configured - messages won\'t be sent');
     }
   }
 

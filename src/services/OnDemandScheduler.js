@@ -183,15 +183,15 @@ export class OnDemandScheduler {
       return true;
     }
 
-    // For repeating reminders, check if it's the right time (by hour:minute in Kolkata)
+    // For repeating reminders, check if it's the right time (by hour:minute)
     if (reminder.repeat && reminder.repeat !== 'none') {
       const reminderDate = new Date(reminder.datetime);
-      const targetHour = reminderDate.getUTCHours();
-      const targetMinute = reminderDate.getUTCMinutes();
+      const targetHour = reminderDate.getHours();
+      const targetMinute = reminderDate.getMinutes();
       
       const now = new Date();
-      const currentHour = now.getUTCHours();
-      const currentMinute = now.getUTCMinutes();
+      const currentHour = now.getHours();
+      const currentMinute = now.getMinutes();
 
       // For repeating reminders, check if hours and minutes match (within 1 minute window)
       const hourMatch = targetHour === currentHour;
