@@ -185,25 +185,43 @@ export class OnDemandScheduler {
 
     // For repeating reminders, check if it's the right time (by hour:minute)
     if (reminder.repeat && reminder.repeat !== 'none') {
-      const reminderDate = new Date(reminder.datetime);
-      const targetHour = reminderDate.getHours();
-      const targetMinute = reminderDate.getMinutes();
+      // Parse time from the stored string format
+      let targetHour, targetMinute;
       
-      const now = new Date();
-      const currentHour = now.getHours();
-      const currentMinute = now.getMinutes();
+      if (typeof reminder.datetime === 'string') {
+        const match = reminder.datetime.match(/T(\d{2}):(\d{2}):/);
+        if (match) {
+          targetHour = parseInt(match[1]);
+          targetMinute = parseInt(match[2]);
+        }
+      }
+      
+      if (targetHour !== undefined && targetMinute !== undefined) {
+        // Get current Kolkata time
+        const nowUtc = new Date();
+        let kolkataHours = nowUtc.getUTCHours() + 5;
+        let kolkataMinutes = nowUtc.getUTCMinutes() + 30;
+        
+        // Handle minute overflow
+        if (kolkataMinutes >= 60) {
+          kolkataHours += 1;
+          kolkataMinutes -= 60;
+        }
+        kolkataHours = kolkataHours % 24;
+        
+        // For repeating reminders, check if hours and minutes match (within 0-2 minute window)
+        const hourMatch = targetHour === kolkataHours;
+        const minuteDiff = targetMinute - kolkataMinutes;
+        const minuteMatch = minuteDiff >= 0 && minuteDiff <= 2; // Only at or after
 
-      // For repeating reminders, check if hours and minutes match (within 1 minute window)
-      const hourMatch = targetHour === currentHour;
-      const minuteMatch = Math.abs(targetMinute - currentMinute) <= 1;
-
-      if (hourMatch && minuteMatch) {
-        logger.info('✅ Repeating reminder time matched:', {
-          reminderId: reminder._id,
-          repeat: reminder.repeat,
-          reminderTime: kolkataTime
-        });
-        return true;
+        if (hourMatch && minuteMatch) {
+          logger.info('✅ Repeating reminder time matched:', {
+            reminderId: reminder._id,
+            repeat: reminder.repeat,
+            reminderTime: kolkataTime
+          });
+          return true;
+        }
       }
 
       logger.debug('Repeating reminder not due yet:', {

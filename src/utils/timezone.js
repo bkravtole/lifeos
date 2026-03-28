@@ -219,17 +219,22 @@ export function isReminderDue(reminderDateTime) {
     reminderTime: `${String(reminderHour).padStart(2, '0')}:${String(reminderMinute).padStart(2, '0')}`,
     kolkataTime: `${String(kolkataHours).padStart(2, '0')}:${String(kolkataMinutes).padStart(2, '0')}`,
     hourMatch: reminderHour === kolkataHours,
-    minuteDiff: Math.abs(reminderMinute - kolkataMinutes)
+    minuteDiff: reminderMinute - kolkataMinutes
   });
   
-  // Compare hours and minutes (within ±2 minutes window)
+  // Compare hours and minutes (trigger ONLY at time or up to 2 minutes after)
+  // Don't trigger before the scheduled time
   const hourMatch = reminderHour === kolkataHours;
-  const minuteDiff = Math.abs(reminderMinute - kolkataMinutes);
-  const minuteMatch = minuteDiff <= 2 || (minuteDiff === 58); // Handle minute wrap-around
+  const minuteDiff = reminderMinute - kolkataMinutes;  // Directional, not absolute
   
-  const isDue = hourMatch && minuteMatch;
+  // Trigger when:
+  // - Hour matches AND
+  // - Current minute >= reminder minute (at or after) AND  
+  // - Current minute <= reminder minute + 2 (within 2 min window after)
+  const isDue = hourMatch && minuteDiff >= 0 && minuteDiff <= 2;
+  
   if (isDue) {
-    console.log('✅ REMINDER IS DUE!');
+    console.log('✅ REMINDER IS DUE! (At time or up to 2 min after)');
   }
   
   return isDue;
