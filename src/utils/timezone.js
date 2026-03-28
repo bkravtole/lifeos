@@ -65,6 +65,22 @@ export function parseTimeInKolkata(timeStr) {
         if (ampm === 'am' && hour === 12) {
           hour = 0;
         }
+      } else {
+        // PM INFERENCE (Bug Fix)
+        // If no AM/PM provided, and the implied AM time is in the past for today, assume PM
+        // e.g., If it is 15:40 and user says "3:41", assume 15:41 (PM) instead of 03:41 (AM)
+        const isToday = !lowerStr.includes('tomorrow') && !lowerStr.includes('कल') && !lowerStr.includes('agle din');
+        if (isToday && hour > 0 && hour <= 12) {
+          // Calculate total minutes for comparison
+          const currentTotalMinutes = kHours * 60 + kMinutes;
+          const parsedTotalMinutes = hour * 60 + minute;
+          
+          // If the AM time has already passed today, assume PM
+          if (parsedTotalMinutes <= currentTotalMinutes) {
+            hour += 12;
+            console.log('🔄 Inferred PM since AM time has passed:', { originalHour: hour - 12, newHour: hour });
+          }
+        }
       }
 
       // Validate hour/minute

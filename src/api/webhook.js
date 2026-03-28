@@ -487,17 +487,31 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
                 reason: 'Could not extract valid time'
               });
               
-              // Use today's current time + 5 minutes as fallback
-              const fallbackTime = new Date();
-              fallbackTime.setMinutes(fallbackTime.getMinutes() + 5);
-              const year = fallbackTime.getFullYear();
-              const month = String(fallbackTime.getMonth() + 1).padStart(2, '0');
-              const day = String(fallbackTime.getDate()).padStart(2, '0');
-              const hours = String(fallbackTime.getHours()).padStart(2, '0');
-              const mins = String(fallbackTime.getMinutes()).padStart(2, '0');
-              reminderDateTime = `${year}-${month}-${day}T${hours}:${mins}:00+05:30`;
+              // Bug Fix: Use Kolkata time for fallback, not Vercel server local time (UTC)
+              const nowUtc = new Date();
+              let kYear = nowUtc.getUTCFullYear();
+              let kMonth = nowUtc.getUTCMonth() + 1; // 1-based
+              let kDay = nowUtc.getUTCDate();
+              let kHours = nowUtc.getUTCHours() + 5;
+              let kMinutes = nowUtc.getUTCMinutes() + 30 + 5; // Add 5 minutes for fallback
               
-              logger.warn('⚠️ Using fallback reminder time (5 mins from now):', {
+              // Handle minute/hour overflow
+              if (kMinutes >= 60) { kHours += 1; kMinutes -= 60; }
+              if (kHours >= 24) {
+                kHours -= 24;
+                kDay += 1;
+                const daysInKMonth = new Date(Date.UTC(kYear, kMonth, 0)).getUTCDate();
+                if (kDay > daysInKMonth) { kDay = 1; kMonth += 1; }
+                if (kMonth > 12) { kMonth = 1; kYear += 1; }
+              }
+
+              const monthStr = String(kMonth).padStart(2, '0');
+              const dayStr = String(kDay).padStart(2, '0');
+              const hourStr = String(kHours).padStart(2, '0');
+              const minuteStr = String(kMinutes).padStart(2, '0');
+              reminderDateTime = `${kYear}-${monthStr}-${dayStr}T${hourStr}:${minuteStr}:00+05:30`;
+              
+              logger.warn('⚠️ Using IST fallback reminder time (5 mins from now):', {
                 fallbackTime: reminderDateTime,
                 entities: JSON.stringify(entities)
               });
@@ -567,10 +581,57 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
       routineService: {
         createRoutine: async (entities) => {
           try {
+            // Check for incomplete routine (missing activity or time)
+            const activity = entities?.activity || '';
+            const time = entities?.time || '';
+            
+            const activityMissing = !activity || activity.toLowerCase() === 'routine' || activity.toLowerCase() === 'unknown' || activity.toLowerCase() === 'null';
+            const timeMissing = !time || time.toLowerCase() === 'now' || time.toLowerCase() === 'unknown' || time.toLowerCase() === 'null';
+            
+            // If critical info is missing, ask for clarification
+            if (activityMissing || timeMissing) {
+              logger.info('⚠️ Incomplete routine detected - asking for clarification:', {
+                activity: activity || 'missing',
+                time: time || 'missing'
+              });
+              
+              const lang = aiEngine.detectLanguage(processedMessage.text);
+              let clarificationMsg = '';
+              
+              if (lang === 'hindi') {
+                if (activityMissing && timeMissing) {
+                  clarificationMsg = '🤔 मैं आपकी क्या रूटीन सेट करूँ?\n1️⃣ कौनसी गतिविधि है?\n2️⃣ किस समय (e.g., सुबह 7 बजे)?';
+                } else if (activityMissing) {
+                  clarificationMsg = `🤔 कौनसी गतिविधि की रूटीन सेट करनी है?`;
+                } else {
+                  clarificationMsg = `💭 यह रूटीन रोज़ किस समय करनी है? (e.g., 7:00 AM)`;
+                }
+              } else if (lang === 'hinglish') {
+                if (activityMissing && timeMissing) {
+                  clarificationMsg = '🤔 Main aapki kya routine set karu?\n1️⃣ Konsi activity hai?\n2️⃣ Kis time par (e.g., subah 7 baje)?';
+                } else if (activityMissing) {
+                  clarificationMsg = `🤔 Konsi activity ki routine set karni hai?`;
+                } else {
+                  clarificationMsg = `💭 Yeh routine roz kis waqt karni hai? (e.g., 7:00 AM)`;
+                }
+              } else {
+                if (activityMissing && timeMissing) {
+                  clarificationMsg = '🤔 I need more details for your routine!\n1️⃣ What is the activity?\n2️⃣ What time should it happen?';
+                } else if (activityMissing) {
+                  clarificationMsg = `🤔 What activity should this routine be for?`;
+                } else {
+                  clarificationMsg = `💭 At what time should this routine happen daily? (e.g., 7:00 AM)`;
+                }
+              }
+              
+              await whatsappService.sendMessage(rawMessage.from, clarificationMsg);
+              return { success: false, incomplete: true, error: 'Missing activity or time for routine' };
+            }
+
             const routine = await RoutineService.createRoutine(user._id, {
-              activity: entities.activity || 'Activity',
+              activity: activity,
               schedule: entities.schedule || 'daily',
-              time: entities.time || '06:00',
+              time: time,
               daysOfWeek: entities.daysOfWeek,
               description: entities.description
             });

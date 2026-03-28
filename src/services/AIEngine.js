@@ -296,8 +296,16 @@ Return ONLY JSON:
       }
 
       if (intent === 'CREATE_ROUTINE') {
-        let activity = entities?.activity || this._extractActivity(currentUserMessage) || 'routine';
-        let time = entities?.time || this._extractTime(currentUserMessage) || 'specified time';
+        let extractedActivity = this._extractActivity(currentUserMessage);
+        let extractedTime = this._extractTime(currentUserMessage);
+        
+        let activity = entities?.activity;
+        if (!activity || activity === 'null') activity = extractedActivity;
+        if (!activity || activity === 'null') activity = 'this routine';
+        
+        let time = entities?.time;
+        if (!time || time === 'null') time = extractedTime;
+        if (!time || time === 'null') time = 'the specified time';
         
         if (lang === 'hindi') {
           return `✅ बिल्कुल! मैंने आपके लिए ${activity} का daily routine ${time} पर सेट कर दिया है। 📅`;
