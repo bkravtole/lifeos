@@ -377,24 +377,59 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
     // Detect intent using AI (Groq)
     let aiResult;
     try {
+      // Check for pending action (multi-turn logic)
+      const pendingAction = context.context?.pendingAction;
+      const isPendingValid = pendingAction && (Date.now() - new Date(pendingAction.startedAt).getTime() < 15 * 60 * 1000); // 15 min expiry
+      
       aiResult = await aiEngine.detectIntent(processedMessage.text, {
         lastActivity: context.context.lastActivity,
         missedActivities: context.context.missedActivities
       });
 
+      // CONTEXTUAL MERGE: If intent is CHAT but we have a pending incomplete action
+      if (aiResult.intent === 'CHAT' && isPendingValid) {
+         logger.info('🧠 Contextual Merge Check:', { pendingIntent: pendingAction.intent });
+         
+         if (pendingAction.intent === 'CREATE_REMINDER') {
+            const currentEntities = aiResult.entities || {};
+            const mergedEntities = { ...pendingAction.entities };
+            
+            // Merge logic: fill in the blanks
+            if (!mergedEntities.activity || mergedEntities.activity === 'none' || mergedEntities.activity === 'reminder') {
+               mergedEntities.activity = processedMessage.text; // Use whole msg if activity was missing
+            } else if (!mergedEntities.datetime || mergedEntities.datetime === 'none') {
+               mergedEntities.datetime = processedMessage.text;
+            }
+            
+            aiResult.intent = 'CREATE_REMINDER';
+            aiResult.entities = mergedEntities;
+            aiResult.confidence = 0.99;
+            logger.info('✅ Contextual Merge Success (Reminder):', { merged: mergedEntities });
+         } else if (pendingAction.intent === 'CREATE_ROUTINE') {
+            const mergedEntities = { ...pendingAction.entities };
+            if (!mergedEntities.activity || mergedEntities.activity === 'none') mergedEntities.activity = processedMessage.text;
+            else if (!mergedEntities.time || mergedEntities.time === 'none') mergedEntities.time = processedMessage.text;
+            
+            aiResult.intent = 'CREATE_ROUTINE';
+            aiResult.entities = mergedEntities;
+            aiResult.confidence = 0.99;
+            logger.info('✅ Contextual Merge Success (Routine):', { merged: mergedEntities });
+         }
+      }
+
       // Override intent if name update pattern matched
       if (updateNameMatch) {
-        aiResult.intent = 'UPDATE_NAME';
-        aiResult.activity = updateNameMatch;
-        aiResult.confidence = 0.95;
-        logger.info('🔤 UPDATE_NAME detected via pattern:', { newName: updateNameMatch });
+         aiResult.intent = 'UPDATE_NAME';
+         aiResult.activity = updateNameMatch;
+         aiResult.confidence = 0.95;
+         logger.info('🔤 UPDATE_NAME detected via pattern:', { newName: updateNameMatch });
       }
       
       // Override intent if reminders query pattern matched
       if (hasQueryRemindersMatch) {
-        aiResult.intent = 'QUERY_REMINDERS';
-        aiResult.confidence = 0.95;
-        logger.info('📋 QUERY_REMINDERS detected via pattern');
+         aiResult.intent = 'QUERY_REMINDERS';
+         aiResult.confidence = 0.95;
+         logger.info('📋 QUERY_REMINDERS detected via pattern');
       }
     } catch (error) {
       logger.warn('AI detection failed, defaulting to CHAT:', error.message);
@@ -454,9 +489,18 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
                 }
               }
               
+              // NEW: Set pending action to enable multi-turn continuation
+              await ContextEngine.setPendingAction(user._id, {
+                intent: 'CREATE_REMINDER',
+                entities: { activity, datetime }
+              });
+
               await whatsappService.sendMessage(rawMessage.from, clarificationMsg);
               return { success: false, incomplete: true, error: 'Missing activity or time' };
             }
+            
+            // Clear pending action if we are completing it
+            await ContextEngine.clearPendingAction(user._id);
             
             // Parse time string to datetime if needed
             let reminderDateTime = entities.datetime || entities.time;
@@ -688,10 +732,19 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
                   clarificationMsg = `💭 At what time should this routine happen daily? (e.g., 7:00 AM)`;
                 }
               }
-              
+
+              // NEW: Set pending action for routines
+              await ContextEngine.setPendingAction(user._id, {
+                intent: 'CREATE_ROUTINE',
+                entities: { activity, time }
+              });
+
               await whatsappService.sendMessage(rawMessage.from, clarificationMsg);
               return { success: false, incomplete: true, error: 'Missing activity or time for routine' };
             }
+            
+            // Clear pending routine action
+            await ContextEngine.clearPendingAction(user._id);
 
             const routine = await RoutineService.createRoutine(user._id, {
               activity: activity,

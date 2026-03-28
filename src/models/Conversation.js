@@ -22,7 +22,13 @@ const conversationSchema = new mongoose.Schema(
     context: {
       lastActivity: String,
       missedActivities: [String],
-      preferences: mongoose.Schema.Types.Mixed
+      preferences: mongoose.Schema.Types.Mixed,
+      pendingAction: {
+        intent: String,
+        entities: mongoose.Schema.Types.Mixed,
+        lastQuestion: String,
+        startedAt: { type: Date, default: Date.now }
+      }
     },
     summary: String
   },

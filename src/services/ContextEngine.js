@@ -73,6 +73,41 @@ export class ContextEngine {
   }
 
   /**
+   * Set pending action for user
+   */
+  static async setPendingAction(userId, action) {
+    try {
+      const conversation = await this.getContext(userId);
+      conversation.context.pendingAction = {
+        ...action,
+        startedAt: new Date()
+      };
+      await conversation.save();
+      logger.info('Pending action set:', { userId, intent: action.intent });
+      return conversation;
+    } catch (error) {
+      logger.error('Failed to set pending action:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Clear pending action
+   */
+  static async clearPendingAction(userId) {
+    try {
+      const conversation = await this.getContext(userId);
+      conversation.context.pendingAction = undefined;
+      await conversation.save();
+      logger.info('Pending action cleared:', { userId });
+      return conversation;
+    } catch (error) {
+      logger.error('Failed to clear pending action:', error.message);
+      throw error;
+    }
+  }
+
+  /**
    * Get conversation summary for AI
    */
   static async getConversationSummary(userId, limit = 10) {
