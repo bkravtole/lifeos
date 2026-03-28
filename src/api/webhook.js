@@ -415,8 +415,8 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
             const activity = entities?.activity || '';
             const datetime = entities?.datetime || entities?.time || '';
             
-            const activityMissing = !activity || activity.toLowerCase() === 'reminder' || activity.toLowerCase() === 'unknown' || activity.toLowerCase() === 'none';
-            const timeMissing = !datetime || datetime.toLowerCase() === 'now' || datetime.toLowerCase() === 'unknown' || datetime.toLowerCase() === 'none';
+            const activityMissing = !activity || activity.toLowerCase() === 'reminder' || activity.toLowerCase() === 'unknown' || activity.toLowerCase() === 'none' || activity.toLowerCase() === 'daily reminder';
+            const timeMissing = !datetime || datetime.toLowerCase() === 'now' || datetime.toLowerCase() === 'unknown' || datetime.toLowerCase() === 'none' || datetime.toLowerCase() === 'daily' || datetime.toLowerCase() === 'everyday' || datetime.toLowerCase() === 'weekly' || datetime.toLowerCase() === 'monthly';
             
             // If critical info is missing, ask for clarification
             if (activityMissing || timeMissing) {
@@ -616,8 +616,8 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
             const activity = entities?.activity || '';
             const time = entities?.time || '';
             
-            const activityMissing = !activity || activity.toLowerCase() === 'routine' || activity.toLowerCase() === 'unknown' || activity.toLowerCase() === 'null' || activity.toLowerCase() === 'none';
-            const timeMissing = !time || time.toLowerCase() === 'now' || time.toLowerCase() === 'unknown' || time.toLowerCase() === 'null' || time.toLowerCase() === 'none';
+            const activityMissing = !activity || activity.toLowerCase() === 'routine' || activity.toLowerCase() === 'unknown' || activity.toLowerCase() === 'null' || activity.toLowerCase() === 'none' || activity.toLowerCase() === 'daily routine';
+            const timeMissing = !time || time.toLowerCase() === 'now' || time.toLowerCase() === 'unknown' || time.toLowerCase() === 'null' || time.toLowerCase() === 'none' || time.toLowerCase() === 'daily' || time.toLowerCase() === 'everyday' || time.toLowerCase() === 'weekly' || time.toLowerCase() === 'monthly';
             
             // If critical info is missing, ask for clarification
             if (activityMissing || timeMissing) {
