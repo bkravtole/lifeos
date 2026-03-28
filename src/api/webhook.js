@@ -358,23 +358,38 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
             
             if (typeof reminderDateTime === 'string') {
               // Parse time string like "09:00", "2:30 PM", "tomorrow 9 AM" etc
+              logger.info('🔍 Attempting to parse time string:', {
+                input: reminderDateTime,
+                source: entities.datetime ? 'datetime' : 'time'
+              });
               reminderDateTime = parseTimeToDateTime(reminderDateTime);
-              logger.debug('Parsed time:', {
+              logger.info('⏰ Time parsing result:', {
                 input: entities.datetime || entities.time,
-                output: reminderDateTime
+                parsed: reminderDateTime,
+                isValid: !!reminderDateTime && typeof reminderDateTime === 'string'
               });
             }
             
-            // If still not a string (parsed time), use tomorrow at 9 AM
+            // If parsing failed, log the problem and ask user to clarify
             if (!reminderDateTime || typeof reminderDateTime !== 'string') {
-              const tomorrow = new Date();
-              tomorrow.setDate(tomorrow.getDate() + 1);
-              const year = tomorrow.getFullYear();
-              const month = String(tomorrow.getMonth() + 1).padStart(2, '0');
-              const day = String(tomorrow.getDate()).padStart(2, '0');
-              reminderDateTime = `${year}-${month}-${day}T09:00:00+05:30`;
-              logger.warn('Using fallback reminder time (tomorrow 9 AM):', {
-                fallbackTime: reminderDateTime
+              logger.error('❌ Time parsing failed - using fallback:', {
+                entities,
+                reason: 'Could not extract valid time'
+              });
+              
+              // Use today's current time + 5 minutes as fallback
+              const fallbackTime = new Date();
+              fallbackTime.setMinutes(fallbackTime.getMinutes() + 5);
+              const year = fallbackTime.getFullYear();
+              const month = String(fallbackTime.getMonth() + 1).padStart(2, '0');
+              const day = String(fallbackTime.getDate()).padStart(2, '0');
+              const hours = String(fallbackTime.getHours()).padStart(2, '0');
+              const mins = String(fallbackTime.getMinutes()).padStart(2, '0');
+              reminderDateTime = `${year}-${month}-${day}T${hours}:${mins}:00+05:30`;
+              
+              logger.warn('⚠️ Using fallback reminder time (5 mins from now):', {
+                fallbackTime: reminderDateTime,
+                entities: JSON.stringify(entities)
               });
             }
             
@@ -480,7 +495,22 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
     // Route to appropriate handler
     let routeResult = {};
     try {
-      routeResult = await IntentRouter.route(aiResult.intent, aiResult.entities || {}, handlers);
+      // Include activity and time from AIEngine in entities for handlers
+      const enrichedEntities = {
+        ...aiResult.entities,
+        activity: aiResult.activity,
+        datetime: aiResult.time || undefined,
+        time: aiResult.time || undefined
+      };
+      
+      logger.info('🔄 Routing intent with enriched entities:', {
+        intent: aiResult.intent,
+        activity: aiResult.activity,
+        time: aiResult.time,
+        entities: JSON.stringify(enrichedEntities)
+      });
+      
+      routeResult = await IntentRouter.route(aiResult.intent, enrichedEntities, handlers);
     } catch (error) {
       logger.warn('Route handling failed:', error.message);
     }

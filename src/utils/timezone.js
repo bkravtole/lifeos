@@ -25,16 +25,25 @@ export function parseTimeInKolkata(timeStr) {
     
     const lowerStr = timeStr.toLowerCase().trim();
 
-    // Extract time (handles "14:30", "14 30", "2:30", "00:15", "11:06", "2:30 PM", etc)
-    const timeMatch = lowerStr.match(/(\d{1,2})\s*[:./]?\s*(\d{2})?\s*(am|pm|a\.m|p\.m)?/i);
+    // More robust time extraction - handles multiple formats
+    // "14:30", "14 30", "2:30", "00:15", "11:06", "2:30 PM", "11 52 am", etc.
+    let timeMatch = lowerStr.match(/(\d{1,2})\s*[:./\s]\s*(\d{2})\s*(am|pm|a\.m|p\.m)?/i);
+    
+    // If first pattern didn't work, try just hour only
+    if (!timeMatch) {
+      timeMatch = lowerStr.match(/(\d{1,2})\s*(am|pm|a\.m|p\.m)?/i);
+    }
     
     if (timeMatch) {
       hour = parseInt(timeMatch[1]);
-      minute = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+      minute = timeMatch[2] && timeMatch[2].match(/^\d/) ? parseInt(timeMatch[2]) : 0;
+      
+      // Get AM/PM indicator (it could be in different positions)
+      const ampmStr = lowerStr.match(/(am|pm|a\.m|p\.m)/i)?.[0] || '';
 
       // Handle AM/PM conversion
-      if (timeMatch[3]) {
-        const ampm = timeMatch[3].toLowerCase().replace('.', '');
+      if (ampmStr) {
+        const ampm = ampmStr.toLowerCase().replace('.', '');
         if (ampm === 'pm' && hour < 12) {
           hour += 12;
         }
@@ -45,12 +54,16 @@ export function parseTimeInKolkata(timeStr) {
 
       // Validate hour/minute
       if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+        console.warn('⚠️ Time validation failed:', { hour, minute, input: timeStr });
         return null;
       }
+
+      console.log('✅ Time extracted:', { input: timeStr, hour, minute, hasAMPM: !!ampmStr });
     }
 
-    // If no time found, use default 9 AM
+    // If no time found, use default 9 AM (but log this!)
     if (hour === null) {
+      console.warn('⚠️ No time found in string, using default 9 AM:', { input: timeStr });
       hour = 9;
       minute = 0;
     }
@@ -69,6 +82,7 @@ export function parseTimeInKolkata(timeStr) {
         }
       }
     }
+    // For "today" or no date mentioned, use today (already set)
 
     // Format as ISO string with +05:30 offset (Kolkata timezone)
     const monthStr = String(month).padStart(2, '0');
@@ -76,10 +90,13 @@ export function parseTimeInKolkata(timeStr) {
     const hourStr = String(hour).padStart(2, '0');
     const minuteStr = String(minute).padStart(2, '0');
     
+    const result = `${year}-${monthStr}-${dayStr}T${hourStr}:${minuteStr}:00+05:30`;
+    console.log('✅ Final parsed time:', { input: timeStr, output: result });
+    
     // Store with +05:30 offset to indicate Kolkata time (NO UTC conversion)
-    return `${year}-${monthStr}-${dayStr}T${hourStr}:${minuteStr}:00+05:30`;
+    return result;
   } catch (error) {
-    console.error('Error parsing time in Kolkata timezone:', error.message);
+    console.error('❌ Error parsing time in Kolkata timezone:', error.message);
     return null;
   }
 }
