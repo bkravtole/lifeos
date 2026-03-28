@@ -1,5 +1,6 @@
-import mongoose from 'mongoose';
-import ActivityLog from '../models/ActivityLog.js';
+ import ActivityLog from '../models/ActivityLog.js';
+import Routine from '../models/Routine.js';
+import RoutineService from './RoutineService.js';
 import logger from '../utils/logger.js';
 
 /**
@@ -23,6 +24,26 @@ export class ActivityService {
 
       await log.save();
       logger.info('Activity logged:', { userId, activity, status });
+
+      // If activity is marked as 'done', check for a matching routine to update streak
+      if (status === 'done') {
+        try {
+          // Find active routine that matches this activity name (case-insensitive)
+          const routine = await Routine.findOne({
+            userId,
+            active: true,
+            activity: { $regex: new RegExp(`^${activity}$`, 'i') }
+          });
+
+          if (routine) {
+            await RoutineService.updateStreak(routine._id);
+            logger.info('Related routine streak updated:', { routineId: routine._id, activity });
+          }
+        } catch (streakError) {
+          logger.error('Failed to update routine streak from activity log:', streakError.message);
+        }
+      }
+
       return log;
     } catch (error) {
       logger.error('Failed to log activity:', error.message);

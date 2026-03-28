@@ -17,7 +17,9 @@ export class RoutineService {
         schedule: data.schedule || 'daily',
         time: data.time,
         daysOfWeek: data.daysOfWeek,
-        description: data.description
+        description: data.description,
+        streak: 0,
+        lastCompletedAt: null
       });
 
       await routine.save();
@@ -75,6 +77,66 @@ export class RoutineService {
     } catch (error) {
       logger.error('Failed to delete routine:', error.message);
       throw error;
+    }
+  }
+
+  /**
+   * Update routine streak
+   */
+  static async updateStreak(routineId) {
+    try {
+      const routine = await Routine.findById(routineId);
+      if (!routine) return null;
+
+      const now = new Date();
+      const lastCompleted = routine.lastCompletedAt ? new Date(routine.lastCompletedAt) : null;
+      
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+
+      if (lastCompleted) {
+        lastCompleted.setHours(0,0,0,0);
+        
+        if (lastCompleted.getTime() === today.getTime()) {
+          // Already logged today, skip
+          return routine;
+        }
+        
+        if (lastCompleted.getTime() === yesterday.getTime()) {
+          // Consecutive day!
+          routine.streak += 1;
+        } else {
+          // Gap detected, reset to 1
+          routine.streak = 1;
+        }
+      } else {
+        // First time
+        routine.streak = 1;
+      }
+
+      routine.lastCompletedAt = now;
+      await routine.save();
+      
+      logger.info('Streak updated:', { routineId, newStreak: routine.streak });
+      return routine;
+    } catch (error) {
+      logger.error('Failed to update streak:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Reset streak
+   */
+  static async resetStreak(routineId) {
+    try {
+       await Routine.findByIdAndUpdate(routineId, { streak: 0 });
+       logger.info('Streak reset:', { routineId });
+    } catch (error) {
+       logger.error('Failed to reset streak:', error.message);
     }
   }
 

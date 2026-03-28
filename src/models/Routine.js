@@ -23,7 +23,9 @@ const routineSchema = new mongoose.Schema(
     },
     daysOfWeek: [Number],
     description: String,
-    active: { type: Boolean, default: true }
+    active: { type: Boolean, default: true },
+    streak: { type: Number, default: 0 },
+    lastCompletedAt: Date
   },
   { timestamps: true }
 );

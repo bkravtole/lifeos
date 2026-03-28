@@ -338,7 +338,32 @@ export class OnDemandScheduler {
             const userPhone = user?.phone;
 
             if (userPhone) {
-              const message = `🎯 It's ${routine.activity} time! Let's make it happen 💪\n\nReply with "done" when completed.`;
+              // Manage Streak logic before sending
+              const today = new Date();
+              today.setHours(0,0,0,0);
+              const yesterday = new Date(today);
+              yesterday.setDate(yesterday.getDate() - 1);
+              
+              const lastCompleted = routine.lastCompletedAt ? new Date(routine.lastCompletedAt) : null;
+              if (lastCompleted) lastCompleted.setHours(0,0,0,0);
+
+              // If last completion was before yesterday, the streak is broken!
+              if (!lastCompleted || lastCompleted.getTime() < yesterday.getTime()) {
+                if (routine.streak > 0) {
+                  logger.info('Resetting broken streak for routine:', { routineId: routine._id, streak: routine.streak });
+                  await RoutineService.resetStreak(routine._id);
+                  routine.streak = 0; // Update local copy for message
+                }
+              }
+
+              let message = '';
+              const streak = routine.streak || 0;
+              
+              if (streak > 0) {
+                message = `🔥 **You're on a ${streak} day streak!** Let's make it ${streak + 1}! 🚀\n\n🎯 It's ${routine.activity} time! 💪\n\nReply with "done" when completed.`;
+              } else {
+                message = `🎯 It's ${routine.activity} time! Let's start a new streak today! 💪\n\nReply with "done" when completed.`;
+              }
 
               await this.whatsappService.sendMessage(userPhone, message);
 

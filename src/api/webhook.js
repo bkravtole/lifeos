@@ -542,23 +542,62 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
         },
         deleteReminder: async (entities) => {
           try {
+            const rawText = processedMessage.text.toLowerCase();
             const activity = entities.activity?.toLowerCase() || '';
-            const isAll = activity.includes('all') || activity === 'everything' || activity === 'sab';
             
+            // Check for 'all' in entity or raw text
+            const isAll = activity.includes('all') || activity === 'everything' || activity === 'sab' || 
+                         rawText.includes('all') || rawText.includes('everything') || rawText.includes('sab') || rawText.includes('saare');
+            
+            const isOneTimeOnly = rawText.includes('one-time') || rawText.includes('once') || rawText.includes('one time');
+            const isRecurringOnly = rawText.includes('recurring') || rawText.includes('repeat') || rawText.includes('daily');
+
             if (isAll) {
               const reminders = await ReminderService.getActiveReminders(user._id);
+              let deleteCount = 0;
               for (const r of reminders) {
+                // Filter by category if specified
+                if (isOneTimeOnly && r.repeat !== 'none') continue;
+                if (isRecurringOnly && r.repeat === 'none') continue;
+                
                 await ReminderService.deleteReminder(r._id);
+                deleteCount++;
               }
-              return { success: true, deleted: 'all reminders' };
-            } else if (activity && activity !== 'reminder' && activity !== 'null') {
-              const reminders = await ReminderService.getActiveReminders(user._id);
-              const match = reminders.find(r => r.title.toLowerCase().includes(activity));
-              if (match) {
-                await ReminderService.deleteReminder(match._id);
-                return { success: true, deleted: match.title };
+              
+              let deletedMsg = 'all reminders';
+              if (isOneTimeOnly) deletedMsg = 'all one-time reminders';
+              if (isRecurringOnly) deletedMsg = 'all recurring reminders';
+              
+              if (deleteCount === 0) return { success: false, error: 'No matching reminders found to delete.' };
+              return { success: true, deleted: deletedMsg };
+            }
+
+            // Normal deletion (specific name or vague)
+            const reminders = await ReminderService.getActiveReminders(user._id);
+            let match = null;
+
+            // 1. Precise name match
+            if (activity && activity !== 'reminder' && activity !== 'null') {
+              match = reminders.find(r => r.title.toLowerCase().includes(activity));
+            }
+
+            // 2. Vague fallback: find last 'reminded' activity if user just said 'delete reminder'
+            if (!match && (activity === 'reminder' || activity === 'it' || !activity)) {
+              const lastReminded = await ActivityLog.findOne({
+                userId: user._id,
+                status: 'reminded'
+              }).sort({ date: -1 });
+
+              if (lastReminded) {
+                match = reminders.find(r => r.title.toLowerCase().includes(lastReminded.activity.toLowerCase()));
               }
             }
+
+            if (match) {
+              await ReminderService.deleteReminder(match._id);
+              return { success: true, deleted: match.title };
+            }
+
             return { success: false, error: 'Could not find a matching reminder to delete.' };
           } catch (error) {
             logger.error('Failed to delete reminder:', error.message);
@@ -570,9 +609,24 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
       activityService: {
         logActivity: async (entities) => {
           try {
-            const activity = await ActivityService.logActivity(
+            let targetActivity = entities.activity || 'Activity';
+            
+            // If activity is generic (like "Activity" or missing), try to find the last thing we reminded them about
+            if (!entities.activity || entities.activity.toLowerCase() === 'activity' || entities.activity.toLowerCase() === 'task') {
+              const lastReminded = await ActivityLog.findOne({
+                userId: user._id,
+                status: 'reminded'
+              }).sort({ date: -1 });
+              
+              if (lastReminded) {
+                targetActivity = lastReminded.activity;
+                logger.info('Vague "done" matched to last reminder:', { matchedActivity: targetActivity });
+              }
+            }
+
+            const activityLog = await ActivityService.logActivity(
               user._id,
-              entities.activity || 'Activity',
+              targetActivity,
               entities.status || 'done',
               {
                 date: entities.date,
@@ -580,8 +634,8 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
                 notes: entities.notes
               }
             );
-            logger.info('Activity logged:', { activityId: activity._id });
-            return { success: true, data: activity };
+            logger.info('Activity logged:', { activityId: activityLog._id, activity: targetActivity });
+            return { success: true, data: activityLog };
           } catch (error) {
             logger.error('Failed to log activity:', error.message);
             return { success: false };
@@ -679,8 +733,11 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
         },
         deleteRoutine: async (entities) => {
           try {
+            const rawText = processedMessage.text.toLowerCase();
             const activity = entities.activity?.toLowerCase() || '';
-            const isAll = activity.includes('all') || activity === 'everything' || activity === 'sab';
+            
+            const isAll = activity.includes('all') || activity === 'everything' || activity === 'sab' ||
+                         rawText.includes('all') || rawText.includes('everything') || rawText.includes('sab') || rawText.includes('saare');
             
             if (isAll) {
               const routines = await RoutineService.getUserRoutines(user._id);
@@ -688,14 +745,32 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
                 await RoutineService.deleteRoutine(r._id);
               }
               return { success: true, deleted: 'all routines' };
-            } else if (activity && activity !== 'routine' && activity !== 'null') {
-              const routines = await RoutineService.getUserRoutines(user._id);
-              const match = routines.find(r => r.activity.toLowerCase().includes(activity));
-              if (match) {
-                await RoutineService.deleteRoutine(match._id);
-                return { success: true, deleted: match.activity };
+            }
+
+            const routines = await RoutineService.getUserRoutines(user._id);
+            let match = null;
+
+            if (activity && activity !== 'routine' && activity !== 'null') {
+              match = routines.find(r => r.activity.toLowerCase().includes(activity));
+            }
+
+            // Vague fallback: last reminded routine
+            if (!match && (activity === 'routine' || !activity)) {
+              const lastReminded = await ActivityLog.findOne({
+                userId: user._id,
+                status: 'reminded'
+              }).sort({ date: -1 });
+
+              if (lastReminded) {
+                match = routines.find(r => r.activity.toLowerCase().includes(lastReminded.activity.toLowerCase()));
               }
             }
+
+            if (match) {
+              await RoutineService.deleteRoutine(match._id);
+              return { success: true, deleted: match.activity };
+            }
+
             return { success: false, error: 'Could not find a matching routine to delete.' };
           } catch (error) {
             logger.error('Failed to delete routine:', error.message);
