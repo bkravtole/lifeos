@@ -1,32 +1,33 @@
-import { formatInTimeZone, toZonedTime, fromZonedTime } from 'date-fns-tz';
-import { format, parse } from 'date-fns';
-
 const TIMEZONE = 'Asia/Kolkata';
+const KOLKATA_OFFSET_HOURS = 5.5; // IST is UTC+5:30
 
 /**
  * Get current time in Asia/Kolkata timezone
- * @returns {Date} - Current UTC Date (but representing Kolkata time)
+ * @returns {Date} - Current time representing Kolkata
  */
 export function getCurrentTimeInKolkata() {
-  return toZonedTime(new Date(), TIMEZONE);
+  const now = new Date();
+  const utcTime = new Date(now.getTime() + now.getTimezoneOffset() * 60000);
+  return new Date(utcTime.getTime() + KOLKATA_OFFSET_HOURS * 3600000);
 }
 
 /**
- * Convert UTC date to Asia/Kolkata timezone
+ * Convert UTC date to Asia/Kolkata timezone representation
  * @param {Date} utcDate - UTC date
- * @returns {Date} - Kolkata time
+ * @returns {Date} - Kolkata timezone representation
  */
 export function toKolkataTime(utcDate) {
-  return toZonedTime(utcDate, TIMEZONE);
+  return new Date(utcDate.getTime() + KOLKATA_OFFSET_HOURS * 3600000);
 }
 
 /**
- * Convert Kolkata local time to UTC for storage
- * @param {Date} kolkataTime - Kolkata local time
+ * Convert local Kolkata time to UTC for storage
+ * Assumes the input Date is already in Kolkata local time
+ * @param {Date} kolkataLocalTime - Local time in Kolkata
  * @returns {Date} - UTC date for storage
  */
-export function toUTC(kolkataTime) {
-  return fromZonedTime(kolkataTime, TIMEZONE);
+export function toUTC(kolkataLocalTime) {
+  return new Date(kolkataLocalTime.getTime() - KOLKATA_OFFSET_HOURS * 3600000);
 }
 
 /**
@@ -104,11 +105,29 @@ export function parseTimeInKolkata(timeStr) {
 /**
  * Format a UTC date for display in Asia/Kolkata timezone
  * @param {Date} utcDate - UTC date from database
- * @param {string} formatStr - Format string (default: 'yyyy-MM-dd HH:mm:ss')
+ * @param {string} formatStr - Format pattern (simplified: 'HH:mm:ss', 'yyyy-MM-dd HH:mm:ss', etc)
  * @returns {string} - Formatted time in Kolkata timezone
  */
 export function formatTimeInKolkata(utcDate, formatStr = 'yyyy-MM-dd HH:mm:ss') {
-  return formatInTimeZone(utcDate, TIMEZONE, formatStr);
+  // Convert UTC to Kolkata time
+  const kolkataTime = toKolkataTime(utcDate);
+  
+  // Simple formatting
+  const year = kolkataTime.getFullYear();
+  const month = String(kolkataTime.getMonth() + 1).padStart(2, '0');
+  const date = String(kolkataTime.getDate()).padStart(2, '0');
+  const hours = String(kolkataTime.getHours()).padStart(2, '0');
+  const minutes = String(kolkataTime.getMinutes()).padStart(2, '0');
+  const seconds = String(kolkataTime.getSeconds()).padStart(2, '0');
+  
+  // Replace format placeholders
+  return formatStr
+    .replace('yyyy', year)
+    .replace('MM', month)
+    .replace('dd', date)
+    .replace('HH', hours)
+    .replace('mm', minutes)
+    .replace('ss', seconds);
 }
 
 /**
