@@ -388,18 +388,18 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
         missedActivities: context.context.missedActivities
       });
 
-      // CONTEXTUAL MERGE: If intent is CHAT but we have a pending incomplete action
-      if (aiResult.intent === 'CHAT' && isPendingValid) {
+      // CONTEXTUAL MERGE: If intent is CHAT or matches pending intent and we have a pending incomplete action
+      if ((aiResult.intent === 'CHAT' || aiResult.intent === pendingAction.intent) && isPendingValid) {
          logger.info('🧠 Contextual Merge Check:', { pendingIntent: pendingAction.intent });
          
          if (pendingAction.intent === 'CREATE_REMINDER') {
-            const currentEntities = aiResult.entities || {};
             const mergedEntities = { ...pendingAction.entities };
             
             // Merge logic: fill in the blanks
-            if (!mergedEntities.activity || mergedEntities.activity === 'none' || mergedEntities.activity === 'reminder') {
-               mergedEntities.activity = processedMessage.text; // Use whole msg if activity was missing
-            } else if (!mergedEntities.datetime || mergedEntities.datetime === 'none' || pendingAction.isPastTimeCorrection) {
+            if (!mergedEntities.activity || mergedEntities.activity === 'none' || mergedEntities.activity === 'reminder' || mergedEntities.activity === 'null') {
+               mergedEntities.activity = (aiResult.activity && aiResult.activity !== 'none' && aiResult.activity !== 'reminder' && aiResult.activity !== 'null') ? aiResult.activity : processedMessage.text;
+            } 
+            if (!mergedEntities.datetime || mergedEntities.datetime === 'none' || pendingAction.isPastTimeCorrection || mergedEntities.datetime === 'null') {
                // If it was a past time correction and they said "tomorrow", fix the date
                if (pendingAction.isPastTimeCorrection && processedMessage.text.toLowerCase().includes('tomorrow')) {
                   const oldDate = mergedEntities.datetime; // e.g. "2026-03-28T15:00:00+05:30"
@@ -408,21 +408,29 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
                   const newDate = dateObj.toISOString().replace('.000Z', '+05:30');
                   mergedEntities.datetime = newDate;
                } else {
-                  mergedEntities.datetime = processedMessage.text;
+                  mergedEntities.datetime = (aiResult.time && aiResult.time !== 'none' && aiResult.time !== 'null') ? aiResult.time : processedMessage.text;
                }
             }
             
             aiResult.intent = 'CREATE_REMINDER';
             aiResult.entities = mergedEntities;
+            aiResult.activity = mergedEntities.activity;
+            aiResult.time = mergedEntities.datetime;
             aiResult.confidence = 0.99;
             logger.info('✅ Contextual Merge Success (Reminder):', { merged: mergedEntities });
          } else if (pendingAction.intent === 'CREATE_ROUTINE') {
             const mergedEntities = { ...pendingAction.entities };
-            if (!mergedEntities.activity || mergedEntities.activity === 'none') mergedEntities.activity = processedMessage.text;
-            else if (!mergedEntities.time || mergedEntities.time === 'none') mergedEntities.time = processedMessage.text;
+            if (!mergedEntities.activity || mergedEntities.activity === 'none' || mergedEntities.activity === 'routine' || mergedEntities.activity === 'null') {
+               mergedEntities.activity = (aiResult.activity && aiResult.activity !== 'none' && aiResult.activity !== 'routine' && aiResult.activity !== 'null') ? aiResult.activity : processedMessage.text;
+            }
+            if (!mergedEntities.time || mergedEntities.time === 'none' || mergedEntities.time === 'null') {
+               mergedEntities.time = (aiResult.time && aiResult.time !== 'none' && aiResult.time !== 'null') ? aiResult.time : processedMessage.text;
+            }
             
             aiResult.intent = 'CREATE_ROUTINE';
             aiResult.entities = mergedEntities;
+            aiResult.activity = mergedEntities.activity;
+            aiResult.time = mergedEntities.time;
             aiResult.confidence = 0.99;
             logger.info('✅ Contextual Merge Success (Routine):', { merged: mergedEntities });
          }
@@ -786,13 +794,41 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
               return { success: false, incomplete: true, error: 'Missing activity or time for routine' };
             }
             
+            // Parse time properly into HH:mm format required for routines
+            let parsedTimeStr = null;
+            if (time && time !== 'none' && time !== 'null' && time !== 'daily' && time !== 'unknown') {
+              const parsedDateTime = parseTimeToDateTime(time);
+              if (parsedDateTime) {
+                // Return format is "2026-03-28T11:22:00+05:30"
+                const match = parsedDateTime.match(/T(\d{2}):(\d{2}):/);
+                if (match) {
+                  parsedTimeStr = `${match[1]}:${match[2]}`;
+                }
+              }
+            }
+            
+            if (!parsedTimeStr) {
+              logger.error('❌ Time parsing failed for routine - asking user to clarify:', { time });
+              const lang = aiEngine.detectLanguage(processedMessage.text);
+              const errMsg = lang === 'hindi' ? '💭 माफ़ करना, मुझे समय समझ नहीं आया। क्या आप एक सटीक समय बता सकते हैं? (जैसे: शाम 4 बजे)' :
+                             lang === 'hinglish' ? '💭 Sorry, mujhe time samajh nahi aaya. Kya aap exact time bata sakte hain? (jaise: 4:00 PM)' :
+                             '💭 Sorry, I couldn\'t understand that time. Could you provide a specific time (like 4:00 PM)?';
+              
+              await ContextEngine.setPendingAction(user._id, {
+                intent: 'CREATE_ROUTINE',
+                entities: { activity, time: null }
+              });
+              await whatsappService.sendMessage(rawMessage.from, errMsg);
+              return { success: false, incomplete: true, error: 'Could not parse time string' };
+            }
+            
             // Clear pending routine action
             await ContextEngine.clearPendingAction(user._id);
 
             const routine = await RoutineService.createRoutine(user._id, {
               activity: activity,
               schedule: entities.schedule || 'daily',
-              time: time,
+              time: parsedTimeStr,
               daysOfWeek: entities.daysOfWeek,
               description: entities.description
             });
