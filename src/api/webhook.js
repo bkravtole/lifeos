@@ -693,8 +693,11 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
         queryReminders: async (entities) => {
           try {
             const reminders = await ReminderService.getActiveReminders(user._id);
+            const routines = await RoutineService.getUserRoutines(user._id);
             
-            if (!reminders || reminders.length === 0) {
+            const totalCount = (reminders?.length || 0) + (routines?.length || 0);
+            
+            if (totalCount === 0) {
               return {
                 success: true,
                 data: {
@@ -716,13 +719,21 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
             const lang = aiEngine.detectLanguage(processedMessage.text);
             
             if (lang === 'hindi') {
-              formattedList = `📋 **आपके Reminders** (कुल: ${reminders.length})\n\n`;
+              formattedList = `📋 **आपके Reminders & Routines** (कुल: ${totalCount})\n\n`;
+              
+              if (routines && routines.length > 0) {
+                formattedList += `📅 **दिनचर्या (Routines):**\n`;
+                routines.forEach((r, i) => {
+                  formattedList += `${i + 1}. ${r.activity} @ ${r.time}\n`;
+                });
+                formattedList += '\n';
+              }
               
               if (daily.length > 0) {
                 formattedList += `🔁 **रोज़:**\n`;
                 daily.forEach((r, i) => {
                   const time = r.datetime.match(/T(\d{2}:\d{2})/)?.[1] || 'unknown';
-                  formattedList += `${i + 1}. ${r.title} @ ${time}\n`;
+                  formattedList += `${(routines?.length || 0) + i + 1}. ${r.title} @ ${time}\n`;
                 });
                 formattedList += '\n';
               }
@@ -741,11 +752,19 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
                 formattedList += `📅 **साप्ताहिक:**\n`;
                 weekly.forEach((r, i) => {
                   const time = r.datetime.match(/T(\d{2}:\d{2})/)?.[1] || 'unknown';
-                  formattedList += `${i + 1}. ${r.title} @ ${time}\n`;
+                  formattedList += `- ${r.title} @ ${time}\n`;
                 });
               }
             } else if (lang === 'hinglish') {
-              formattedList = `📋 **Aapki Reminders** (Total: ${reminders.length})\n\n`;
+              formattedList = `📋 **Aapki Reminders & Routines** (Total: ${totalCount})\n\n`;
+              
+              if (routines && routines.length > 0) {
+                formattedList += `📅 **Routines:**\n`;
+                routines.forEach((r, i) => {
+                  formattedList += `${i + 1}. ${r.activity} @ ${r.time}\n`;
+                });
+                formattedList += '\n';
+              }
               
               if (daily.length > 0) {
                 formattedList += `🔁 **Daily:**\n`;
@@ -770,11 +789,19 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
                 formattedList += `📅 **Weekly:**\n`;
                 weekly.forEach((r, i) => {
                   const time = r.datetime.match(/T(\d{2}:\d{2})/)?.[1] || 'unknown';
-                  formattedList += `${i + 1}. ${r.title} @ ${time}\n`;
+                  formattedList += `- ${r.title} @ ${time}\n`;
                 });
               }
             } else {
-              formattedList = `📋 **Your Reminders** (Total: ${reminders.length})\n\n`;
+              formattedList = `📋 **Your Reminders & Routines** (Total: ${totalCount})\n\n`;
+              
+              if (routines && routines.length > 0) {
+                formattedList += `📅 **Routines:**\n`;
+                routines.forEach((r, i) => {
+                  formattedList += `${i + 1}. ${r.activity} @ ${r.time}\n`;
+                });
+                formattedList += '\n';
+              }
               
               if (daily.length > 0) {
                 formattedList += `🔁 **Daily:**\n`;
@@ -799,14 +826,15 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
                 formattedList += `📅 **Weekly:**\n`;
                 weekly.forEach((r, i) => {
                   const time = r.datetime.match(/T(\d{2}:\d{2})/)?.[1] || 'unknown';
-                  formattedList += `${i + 1}. ${r.title} @ ${time}\n`;
+                  formattedList += `- ${r.title} @ ${time}\n`;
                 });
               }
             }
             
-            logger.info('Reminders queried:', {
+            logger.info('Reminders and Routines queried:', {
               userId: user._id,
-              total: reminders.length,
+              totalReminders: reminders?.length || 0,
+              totalRoutines: routines?.length || 0,
               daily: daily.length,
               oneTime: oneTime.length,
               weekly: weekly.length
@@ -815,7 +843,7 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
             return {
               success: true,
               data: {
-                count: reminders.length,
+                count: totalCount,
                 daily: daily.length,
                 oneTime: oneTime.length,
                 weekly: weekly.length,
