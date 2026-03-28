@@ -58,7 +58,7 @@ INTENT DEFINITIONS:
 - LOG_ACTIVITY: User logs a completed activity (keywords: "done", "completed", "finished", "logged", "tracked")
 - CREATE_ROUTINE: User creates a daily/weekly/monthly routine (keywords: "every day", "daily routine", "daily", "weekly" - EXCEPT if asking for a list)
 - CREATE_GOAL: User wants to achieve a goal and needs a plan (keywords: "goal", "target", "plan", "prepare", "achieve", "weight loss", "exam", "learn")
-- QUERY_GOALS: User wants to check goal progress (keywords: "my goals", "goal progress", "how am I doing")
+- QUERY_GOALS: User wants to check goal progress or subtasks (keywords: "my goals", "goal progress", "how am I doing", "what are my subtasks", "tasks", "my tasks")
 - UPDATE_REMINDER: User wants to change a reminder (keywords: "update reminder", "change reminder for")
 - DELETE_REMINDER: User wants to delete a reminder (keywords: "delete reminder", "remove all reminders", "cancel")
 - UPDATE_ROUTINE: User wants to change a routine (keywords: "update routine", "change routine")
@@ -140,7 +140,10 @@ Examples:
 - "Aaj 3 baje mujhe email bhejne ke liye yaad dilao" → CREATE_REMINDER
 - "Mere reminders dikhao" → QUERY_REMINDERS
 - "Mai aaj workout kar liya" → LOG_ACTIVITY
-- "Roz subah 6 baje daud lagana" → CREATE_ROUTINE
+- CHAT: General conversation, greetings, questions, or unclear intent. DO NOT use other intents for "hi", "hello", "hey", etc.
+- "hi", "hello" → CHAT
+- "what are my subtasks" → QUERY_GOALS
+- "give me my tasks" → QUERY_GOALS
 
 Return ONLY JSON:
 {

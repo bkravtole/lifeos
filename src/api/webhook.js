@@ -388,8 +388,21 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
         missedActivities: context.context.missedActivities
       });
 
+      // GREETING CHECK: If simple greeting, clear status instead of merging
+      const lowerText = processedMessage.text.toLowerCase().trim();
+      const isGreeting = ['hi', 'hello', 'hey', 'hii', 'hiii', 'hola', 'nameste', 'namaste'].some(g => lowerText === g);
+      const isCancel = ['cancel', 'stop', 'abort', 'leave', 'exit', 'niklo', 'band karo'].some(c => lowerText === c);
+      
+      if ((isGreeting || isCancel) && isPendingValid) {
+        logger.info('👋 Greeting/Cancel detected during pending flow - clearing status');
+        await ContextEngine.clearPendingAction(user._id);
+        // Change intent to CHAT to avoid merging
+        aiResult.intent = isCancel ? 'CHAT' : aiResult.intent;
+        if (isCancel) return await whatsappService.sendMessage(rawMessage.from, "ठीक है, मैंने कैंसिल कर दिया! और मैं आपकी क्या सहायता कर सकता हूँ? 😊");
+      }
+
       // CONTEXTUAL MERGE: If intent is CHAT or matches pending intent and we have a pending incomplete action
-      if ((aiResult.intent === 'CHAT' || aiResult.intent === pendingAction.intent) && isPendingValid) {
+      if ((aiResult.intent === 'CHAT' || aiResult.intent === pendingAction.intent) && isPendingValid && !isGreeting && !isCancel) {
          logger.info('🧠 Contextual Merge Check:', { pendingIntent: pendingAction.intent });
          
          if (pendingAction.intent === 'CREATE_REMINDER') {
@@ -832,6 +845,7 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
               description: entities.description
             });
             logger.info('Routine created:', { routineId: routine._id });
+            await ContextEngine.clearPendingAction(user._id);
             return { success: true, data: routine };
           } catch (error) {
             logger.error('Failed to create routine:', error.message);
@@ -853,6 +867,7 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
                   return { success: false, incomplete: true, error: 'nothing_to_update' };
                 }
                 const routine = await RoutineService.updateRoutine(match._id, updateData);
+                await ContextEngine.clearPendingAction(user._id);
                 return { success: true, updated: match.activity, data: routine };
               }
             }
@@ -875,6 +890,7 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
               for (const r of routines) {
                 await RoutineService.deleteRoutine(r._id);
               }
+              await ContextEngine.clearPendingAction(user._id);
               return { success: true, deleted: 'all routines' };
             }
 
@@ -899,6 +915,7 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
 
             if (match) {
               await RoutineService.deleteRoutine(match._id);
+              await ContextEngine.clearPendingAction(user._id);
               return { success: true, deleted: match.activity };
             }
 
@@ -911,6 +928,7 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
         queryRoutine: async (entities) => {
           try {
             const routines = await RoutineService.getUserRoutines(user._id);
+            await ContextEngine.clearPendingAction(user._id);
             return { success: true, data: routines };
           } catch (error) {
             logger.error('Failed to query routines:', error.message);
@@ -947,8 +965,11 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
 
             // 4. Convert sub-tasks to actual reminders/routines
             const result = await GoalService.convertSubTasksToActions(user._id, goal._id);
+            
+            // 5. Clear pending action
+            await ContextEngine.clearPendingAction(user._id);
 
-            // 5. Build summary for user
+            // 6. Build summary for user
             let taskList = breakdown.subTasks.map((t, i) => 
               `${i + 1}. ${t.type === 'routine' ? '🔄' : '⏰'} ${t.title} @ ${t.time}`
             ).join('\n');
@@ -984,6 +1005,7 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
               }
             }
 
+            await ContextEngine.clearPendingAction(user._id);
             return { success: true, data: { formatted, count: goals.length } };
           } catch (error) {
             logger.error('Failed to query goals:', error.message);
