@@ -153,8 +153,8 @@ export class ReminderScheduler {
       const currentHour = now.getHours();
       const currentMinute = now.getMinutes();
 
-      // Allow 1-minute window around target time
-      if (currentHour === targetHour && Math.abs(currentMinute - targetMinute) <= 1) {
+      // Trigger at exact time or up to 1 minute after (not before!)
+      if (currentHour === targetHour && currentMinute >= targetMinute && currentMinute <= targetMinute + 1) {
         return await this.sendReminder(reminder);
       }
 
@@ -172,7 +172,8 @@ export class ReminderScheduler {
       const currentHour = now.getHours();
       const currentMinute = now.getMinutes();
 
-      if (currentDay === targetDay && currentHour === targetHour && Math.abs(currentMinute - targetMinute) <= 1) {
+      // Trigger at exact time or up to 1 minute after (not before!)
+      if (currentDay === targetDay && currentHour === targetHour && currentMinute >= targetMinute && currentMinute <= targetMinute + 1) {
         return await this.sendReminder(reminder);
       }
 

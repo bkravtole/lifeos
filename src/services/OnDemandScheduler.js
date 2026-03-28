@@ -147,7 +147,7 @@ export class OnDemandScheduler {
 
   /**
    * Check if reminder should be sent (timezone-aware: Asia/Kolkata)
-   * Triggers 2 minutes before to 1 minute after reminder time
+   * Triggers at the exact time or up to 1 minute after (never early!)
    */
   _shouldSendReminder(reminder) {
     // Already notified
@@ -209,10 +209,10 @@ export class OnDemandScheduler {
         }
         kolkataHours = kolkataHours % 24;
         
-        // For repeating reminders, check if hours and minutes match (within 0-2 minute window)
+        // For repeating reminders, check if hours and minutes match (at or up to 1 minute after)
         const hourMatch = targetHour === kolkataHours;
         const minuteDiff = targetMinute - kolkataMinutes;
-        const minuteMatch = minuteDiff >= 0 && minuteDiff <= 2; // Only at or after
+        const minuteMatch = minuteDiff >= -1 && minuteDiff <= 0; // Only at or after (not before!)
 
         if (hourMatch && minuteMatch) {
           logger.info('✅ Repeating reminder time matched:', {

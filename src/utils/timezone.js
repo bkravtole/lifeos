@@ -229,12 +229,13 @@ export function isReminderDue(reminderDateTime) {
   
   // Trigger when:
   // - Hour matches AND
-  // - Current minute >= reminder minute (at or after) AND  
-  // - Current minute <= reminder minute + 2 (within 2 min window after)
-  const isDue = hourMatch && minuteDiff >= 0 && minuteDiff <= 2;
+  // - Current minute >= reminder minute (at or after) - meaning minuteDiff <= 0 AND
+  // - Current minute <= reminder minute + 1 (within 1 min window after to allow for cron jitter)
+  // Important: minuteDiff >= 0 means we're BEFORE the scheduled time, so we DON'T want that!
+  const isDue = hourMatch && minuteDiff >= -1 && minuteDiff <= 0;
   
   if (isDue) {
-    console.log('✅ REMINDER IS DUE! (At time or up to 2 min after)');
+    console.log('✅ REMINDER IS DUE! (At exact time or within 1 min after)');
   }
   
   return isDue;
