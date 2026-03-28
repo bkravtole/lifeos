@@ -415,8 +415,8 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
             const activity = entities?.activity || '';
             const datetime = entities?.datetime || entities?.time || '';
             
-            const activityMissing = !activity || activity.toLowerCase() === 'reminder' || activity.toLowerCase() === 'unknown';
-            const timeMissing = !datetime || datetime.toLowerCase() === 'now' || datetime.toLowerCase() === 'unknown';
+            const activityMissing = !activity || activity.toLowerCase() === 'reminder' || activity.toLowerCase() === 'unknown' || activity.toLowerCase() === 'none';
+            const timeMissing = !datetime || datetime.toLowerCase() === 'now' || datetime.toLowerCase() === 'unknown' || datetime.toLowerCase() === 'none';
             
             // If critical info is missing, ask for clarification
             if (activityMissing || timeMissing) {
@@ -585,8 +585,8 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
             const activity = entities?.activity || '';
             const time = entities?.time || '';
             
-            const activityMissing = !activity || activity.toLowerCase() === 'routine' || activity.toLowerCase() === 'unknown' || activity.toLowerCase() === 'null';
-            const timeMissing = !time || time.toLowerCase() === 'now' || time.toLowerCase() === 'unknown' || time.toLowerCase() === 'null';
+            const activityMissing = !activity || activity.toLowerCase() === 'routine' || activity.toLowerCase() === 'unknown' || activity.toLowerCase() === 'null' || activity.toLowerCase() === 'none';
+            const timeMissing = !time || time.toLowerCase() === 'now' || time.toLowerCase() === 'unknown' || time.toLowerCase() === 'null' || time.toLowerCase() === 'none';
             
             // If critical info is missing, ask for clarification
             if (activityMissing || timeMissing) {

@@ -53,6 +53,7 @@ export class AIEngine {
 
 INTENT DEFINITIONS:
 - CREATE_REMINDER: User wants to be reminded to do something at a specific time (keywords: "remind me", "set reminder", "call", "message", "alarm", "notify", "at [time]")
+- QUERY_REMINDERS: User wants to see their list of reminders (keywords: "what are my reminders", "show reminders", "daily reminder list", "list of reminders")
 - LOG_ACTIVITY: User logs a completed activity (keywords: "done", "completed", "finished", "logged", "tracked")
 - CREATE_ROUTINE: User creates a daily/weekly/monthly routine (keywords: "every day", "daily routine", "daily", "weekly")
 - CHAT: General conversation, question, or unclear intent
@@ -61,12 +62,13 @@ INTENT DEFINITIONS:
 EXAMPLES:
 - "Set a reminder to call my brother at 6:55 pm today" → CREATE_REMINDER, activity: "call my brother", time: "6:55 pm today"
 - "Remind me to send email at 3 PM" → CREATE_REMINDER, activity: "send email", time: "3 PM"
+- "What about my daily reminder" → QUERY_REMINDERS
 - "I did workout today" → LOG_ACTIVITY, activity: "workout"
 - "Daily morning jog at 6 AM" → CREATE_ROUTINE, activity: "morning jog", time: "6 AM"
 
 Return ONLY valid JSON (no markdown, no code blocks):
 {
-  "intent": "CREATE_REMINDER|LOG_ACTIVITY|CHAT|QUERY_ROUTINE|DELETE_REMINDER|UPDATE_ROUTINE|CREATE_ROUTINE|CREATE_CLIENT|LOG_INVOICE|SCHEDULE_MEETING|LOG_LEAD|CREATE_PROJECT",
+  "intent": "CREATE_REMINDER|LOG_ACTIVITY|CHAT|QUERY_ROUTINE|DELETE_REMINDER|UPDATE_ROUTINE|CREATE_ROUTINE|QUERY_REMINDERS|CREATE_CLIENT|LOG_INVOICE|SCHEDULE_MEETING|LOG_LEAD|CREATE_PROJECT",
   "confidence": 0.90,
   "activity": "what user wants to do",
   "time": "when user wants to do it (extract from message)",
@@ -81,6 +83,7 @@ Context: ${JSON.stringify(context)}`;
 
 INTENT परिभाषाएं:
 - CREATE_REMINDER: User को किसी समय कुछ करने के लिए याद दिलाना (शब्द: "remind me", "याद दिलाना", "कॉल", "alert", "[समय] पर")
+- QUERY_REMINDERS: User अपने reminder देखना चाहता है (शब्द: "mere reminders", "show reminders", "daily reminder list")
 - LOG_ACTIVITY: किया हुआ काम दर्ज करना (शब्द: "done", "किया", "complete", "finished")
 - CREATE_ROUTINE: दैनिक/साप्ताहिक routine बनाना (शब्द: "हर दिन", "रोज़", "daily", "weekly")
 - CHAT: सामान्य बातचीत
@@ -88,12 +91,13 @@ INTENT परिभाषाएं:
 उदाहरण:
 - "आज 6:55 बजे मुझे अपने भाई को कॉल करने के लिए याद दिलाना" → CREATE_REMINDER
 - "कल 3 बजे email भेजना याद दिलाना" → CREATE_REMINDER
+- "मेरे reminders क्या हैं?" → QUERY_REMINDERS
 - "आज workout कर लिया" → LOG_ACTIVITY
 - "रोज़ सुबह 6 बजे दौड़ना" → CREATE_ROUTINE
 
 केवल JSON लौटाओ:
 {
-  "intent": "CREATE_REMINDER|LOG_ACTIVITY|CHAT|QUERY_ROUTINE|DELETE_REMINDER|UPDATE_ROUTINE|CREATE_ROUTINE|CREATE_CLIENT|LOG_INVOICE|SCHEDULE_MEETING|LOG_LEAD|CREATE_PROJECT",
+  "intent": "CREATE_REMINDER|LOG_ACTIVITY|CHAT|QUERY_ROUTINE|DELETE_REMINDER|UPDATE_ROUTINE|CREATE_ROUTINE|QUERY_REMINDERS|CREATE_CLIENT|LOG_INVOICE|SCHEDULE_MEETING|LOG_LEAD|CREATE_PROJECT",
   "confidence": 0.90,
   "activity": "क्या करना है",
   "time": "कब करना है",
@@ -107,6 +111,7 @@ INTENT परिभाषाएं:
 
 INTENT DEFINITIONS:
 - CREATE_REMINDER: Remind karna user ko kuch karne ke liye (keywords: "remind me", "yaad dilao", "call", "karo", "[time] par")
+- QUERY_REMINDERS: User ko apne reminders dekhne hain (keywords: "mere reminders", "show reminders", "kya reminders list")
 - LOG_ACTIVITY: Activity complete karna (keywords: "done", "kiya", "complete", "finished")
 - CREATE_ROUTINE: Daily/weekly routine banao (keywords: "har din", "roz", "daily", "weekly")
 - CHAT: General baat cheet
@@ -114,12 +119,13 @@ INTENT DEFINITIONS:
 Examples:
 - "Set a reminder to call my brother at 6:55 pm today" → CREATE_REMINDER, activity: "call brother", time: "6:55 pm today"
 - "Aaj 3 baje mujhe email bhejne ke liye yaad dilao" → CREATE_REMINDER
+- "Mere reminders dikhao" → QUERY_REMINDERS
 - "Mai aaj workout kar liya" → LOG_ACTIVITY
 - "Roz subah 6 baje daud lagana" → CREATE_ROUTINE
 
 Return ONLY JSON:
 {
-  "intent": "CREATE_REMINDER|LOG_ACTIVITY|CHAT|QUERY_ROUTINE|DELETE_REMINDER|UPDATE_ROUTINE|CREATE_ROUTINE|CREATE_CLIENT|LOG_INVOICE|SCHEDULE_MEETING|LOG_LEAD|CREATE_PROJECT",
+  "intent": "CREATE_REMINDER|LOG_ACTIVITY|CHAT|QUERY_ROUTINE|DELETE_REMINDER|UPDATE_ROUTINE|CREATE_ROUTINE|QUERY_REMINDERS|CREATE_CLIENT|LOG_INVOICE|SCHEDULE_MEETING|LOG_LEAD|CREATE_PROJECT",
   "confidence": 0.90,
   "activity": "kya karna hai",
   "time": "kab karna hai",
