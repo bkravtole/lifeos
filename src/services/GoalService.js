@@ -77,11 +77,15 @@ export class GoalService {
         const task = goal.subTasks[i];
 
         if (task.type === 'routine' || task.schedule === 'daily') {
+          // Parse time and extract HH:mm for Routine
+          const parsedIsoTime = parseTimeInKolkata(task.time || '9:00 AM');
+          const hhmmTime = parsedIsoTime ? parsedIsoTime.substring(11, 16) : '09:00';
+          
           // Create a routine
           const routine = await RoutineService.createRoutine(userId, {
             activity: task.title,
             schedule: task.schedule || 'daily',
-            time: task.time || '9:00 AM',
+            time: hhmmTime,
             description: `Part of goal: ${goal.title}`
           });
           goal.subTasks[i].linkedRoutineId = routine._id;

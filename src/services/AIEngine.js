@@ -54,9 +54,9 @@ export class AIEngine {
 
 INTENT DEFINITIONS:
 - CREATE_REMINDER: User wants to be reminded to do something at a specific time (keywords: "remind me", "set reminder", "call", "message", "alarm", "notify", "at [time]")
-- QUERY_REMINDERS: User wants to see their list of reminders (keywords: "what are my reminders", "show reminders", "daily reminder list", "list of reminders")
+- QUERY_REMINDERS: User wants to see their list of reminders or routines (keywords: "what are my reminders", "show reminders", "daily reminder list", "list of reminders", "routine list", "my routines")
 - LOG_ACTIVITY: User logs a completed activity (keywords: "done", "completed", "finished", "logged", "tracked")
-- CREATE_ROUTINE: User creates a daily/weekly/monthly routine (keywords: "every day", "daily routine", "daily", "weekly")
+- CREATE_ROUTINE: User creates a daily/weekly/monthly routine (keywords: "every day", "daily routine", "daily", "weekly" - EXCEPT if asking for a list)
 - CREATE_GOAL: User wants to achieve a goal and needs a plan (keywords: "goal", "target", "plan", "prepare", "achieve", "weight loss", "exam", "learn")
 - QUERY_GOALS: User wants to check goal progress (keywords: "my goals", "goal progress", "how am I doing")
 - UPDATE_REMINDER: User wants to change a reminder (keywords: "update reminder", "change reminder for")
@@ -90,9 +90,9 @@ Context: ${JSON.stringify(context)}`;
 
 INTENT परिभाषाएं:
 - CREATE_REMINDER: User को किसी समय कुछ करने के लिए याद दिलाना (शब्द: "remind me", "याद दिलाना", "कॉल", "alert", "[समय] पर")
-- QUERY_REMINDERS: User अपने reminder देखना चाहता है (शब्द: "mere reminders", "show reminders", "daily reminder list")
+- QUERY_REMINDERS: User अपने reminder या routine देखना चाहता है (शब्द: "mere reminders", "show reminders", "daily reminder list", "routine list")
 - LOG_ACTIVITY: किया हुआ काम दर्ज करना (शब्द: "done", "किया", "complete", "finished")
-- CREATE_ROUTINE: दैनिक/साप्ताहिक routine बनाना (शब्द: "हर दिन", "रोज़", "daily", "weekly")
+- CREATE_ROUTINE: दैनिक/साप्ताहिक routine बनाना (शब्द: "हर दिन", "रोज़", "daily", "weekly" - छोड़कर जब list मांगी गई हो)
 - CREATE_GOAL: लक्ष्य प्राप्त करना (शब्द: "goal", "target", "plan", "prepare", "लक्ष्य")
 - QUERY_GOALS: लक्ष्य की प्रगति देखना (शब्द: "मेरे goals", "progress")
 - UPDATE_REMINDER: Reminder बदलना (शब्द: "update reminder", "change reminder for")
@@ -124,9 +124,9 @@ INTENT परिभाषाएं:
 
 INTENT DEFINITIONS:
 - CREATE_REMINDER: Remind karna user ko kuch karne ke liye (keywords: "remind me", "yaad dilao", "call", "karo", "[time] par")
-- QUERY_REMINDERS: User ko apne reminders dekhne hain (keywords: "mere reminders", "show reminders", "kya reminders list")
+- QUERY_REMINDERS: User ko apne reminders ya routines dekhne hain (keywords: "mere reminders", "show reminders", "kya reminders list", "routine list")
 - LOG_ACTIVITY: Activity complete karna (keywords: "done", "kiya", "complete", "finished")
-- CREATE_ROUTINE: Daily/weekly routine banao (keywords: "har din", "roz", "daily", "weekly")
+- CREATE_ROUTINE: Daily/weekly routine banao (keywords: "har din", "roz", "daily", "weekly" - Note: agar list mangi hai to QUERY_REMINDERS)
 - CREATE_GOAL: Goal achieve karna (keywords: "goal", "target", "plan", "prepare", "achieve")
 - QUERY_GOALS: Goal progress dekhna (keywords: "mere goals", "goal progress")
 - UPDATE_REMINDER: Reminder change karna (keywords: "update reminder", "change reminder for")
@@ -166,7 +166,8 @@ Return ONLY JSON:
       ];
 
       const response = await this._callGroqAPI(msgs);
-      const parsed = JSON.parse(response);
+      const jsonStr = response.replace(/```json/gi, '').replace(/```/g, '').trim();
+      const parsed = JSON.parse(jsonStr);
 
       return {
         intent: parsed.intent || 'CHAT',
@@ -216,7 +217,8 @@ Return ONLY JSON:
       ];
 
       const response = await this._callGroqAPI(msgs);
-      return JSON.parse(response);
+      const jsonStr = response.replace(/```json/gi, '').replace(/```/g, '').trim();
+      return JSON.parse(jsonStr);
     } catch (error) {
       logger.error('Entity extraction failed:', error.message);
       return {};
@@ -596,7 +598,8 @@ Return JSON with parsed details.`;
       ];
 
       const response = await this._callGroqAPI(msgs);
-      return JSON.parse(response);
+      const jsonStr = response.replace(/```json/gi, '').replace(/```/g, '').trim();
+      return JSON.parse(jsonStr);
     } catch (error) {
       logger.error('Parse user input failed:', error.message);
       return { raw: message };
@@ -639,7 +642,8 @@ Return ONLY valid JSON (no markdown, no code blocks):
       ];
 
       const response = await this._callGroqAPI(msgs);
-      const parsed = JSON.parse(response);
+      const jsonStr = response.replace(/```json/gi, '').replace(/```/g, '').trim();
+      const parsed = JSON.parse(jsonStr);
       return parsed;
     } catch (error) {
       logger.error('Goal breakdown failed:', error.message);
