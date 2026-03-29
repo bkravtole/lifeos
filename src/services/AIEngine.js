@@ -1,6 +1,9 @@
 import { Groq } from 'groq-sdk';
 import MemoryService from './MemoryService.js';
 import logger from '../utils/logger.js';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
 
 /**
  * Groq AI Engine
@@ -36,6 +39,38 @@ export class AIEngine {
     } catch (error) {
       logger.error('Groq API call failed:', error.message);
       throw error;
+    }
+  }
+
+  /**
+   * Transcribe an audio file buffer to text using Groq Whisper API
+   */
+  async transcribeAudio(audioBuffer, filename = 'voice_note.ogg') {
+    if (!this.apiKey || this.apiKey === 'dummy_key_for_development') {
+        logger.warn('GROQ API Key missing, cannot transcribe audio.');
+        return '';
+    }
+    
+    // Fallback support for Whisper requiring file streams
+    const tempFilePath = path.join(os.tmpdir(), `${Date.now()}_${filename}`);
+    
+    try {
+      fs.writeFileSync(tempFilePath, Buffer.from(audioBuffer));
+      
+      const transcription = await this.groq.audio.transcriptions.create({
+        file: fs.createReadStream(tempFilePath),
+        model: "whisper-large-v3-turbo",
+      });
+      
+      logger.info('🎧 Audio transcribed successfully:', transcription.text);
+      return transcription.text || '';
+    } catch (error) {
+      logger.error('Audio transcription failed:', error.message);
+      return '';
+    } finally {
+      if (fs.existsSync(tempFilePath)) {
+        fs.unlinkSync(tempFilePath);
+      }
     }
   }
 

@@ -218,11 +218,43 @@ export class WhatsAppService {
           senderName: body?.senderName || ''
         };
       }
+      
+      // Media message (voice note)
+      if (body?.content?.contentType === 'media' && body?.content?.media?.type === 'voice') {
+        return {
+          messageId: body?.messageId || this._generateId(),
+          from: body?.from,
+          to: body?.to,
+          timestamp: body?.timestamp || new Date(),
+          type: 'voice',
+          text: '', // To be filled by Whisper
+          mediaUrl: body?.content?.media?.url,
+          senderName: body?.senderName || ''
+        };
+      }
 
       logger.warn('Unknown message format:', body);
       return null;
     } catch (error) {
       logger.error('Failed to parse webhook message:', error.message);
+      return null;
+    }
+  }
+
+  /**
+   * Download media file from URL
+   */
+  async downloadMedia(mediaUrl) {
+    try {
+      if (!mediaUrl) return null;
+      logger.debug('Downloading media from URL:', mediaUrl);
+      
+      const response = await axios.get(mediaUrl, {
+        responseType: 'arraybuffer'
+      });
+      return response.data;
+    } catch (error) {
+      logger.error('Failed to download media:', error.message);
       return null;
     }
   }

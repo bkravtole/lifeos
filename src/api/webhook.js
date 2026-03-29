@@ -138,6 +138,40 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
 
     logger.debug('Received message:', { from: rawMessage.from, type: rawMessage.type });
 
+    // ============ VOICE NOTE HANDLING ============
+    // If user sent a voice note, download and transcribe it before processing
+    if (rawMessage.type === 'voice' && rawMessage.mediaUrl) {
+      logger.info('🎙️ Voice note received, downloading audio...', { from: rawMessage.from, url: rawMessage.mediaUrl });
+      try {
+        const audioBuffer = await whatsappService.downloadMedia(rawMessage.mediaUrl);
+        if (audioBuffer) {
+          // Extract filename from URL for proper extension handling
+          const urlParts = rawMessage.mediaUrl.split('/');
+          const filename = urlParts[urlParts.length - 1] || 'voice_note.ogg';
+          
+          const transcribedText = await aiEngine.transcribeAudio(audioBuffer, filename);
+          if (transcribedText && transcribedText.trim()) {
+            logger.info('🎧 Voice transcription result:', { text: transcribedText, from: rawMessage.from });
+            // Inject transcribed text back into rawMessage so the rest of the pipeline works unchanged
+            rawMessage.text = transcribedText.trim();
+            rawMessage.type = 'text'; // Treat as text from here onwards
+          } else {
+            logger.warn('⚠️ Voice transcription returned empty text');
+            await whatsappService.sendMessage(rawMessage.from, '🎙️ Sorry, I could not understand your voice message. Please try again or type your message.');
+            return res.status(200).json({ success: true, messageId: rawMessage.messageId, note: 'voice_transcription_empty' });
+          }
+        } else {
+          logger.error('❌ Failed to download voice note audio');
+          await whatsappService.sendMessage(rawMessage.from, '🎙️ Sorry, I could not process your voice message. Please try sending it again.');
+          return res.status(200).json({ success: true, messageId: rawMessage.messageId, note: 'voice_download_failed' });
+        }
+      } catch (voiceError) {
+        logger.error('❌ Voice note processing failed:', voiceError.message);
+        await whatsappService.sendMessage(rawMessage.from, '🎙️ Sorry, something went wrong processing your voice message. Please type your message instead.');
+        return res.status(200).json({ success: true, messageId: rawMessage.messageId, note: 'voice_processing_error' });
+      }
+    }
+
     // Process message
     const processedMessage = MessageProcessor.process({
       from: rawMessage.from,
