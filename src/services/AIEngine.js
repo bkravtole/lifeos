@@ -57,7 +57,7 @@ INTENT DEFINITIONS:
 - QUERY_REMINDERS: User wants to see their list of reminders or routines (keywords: "what are my reminders", "show reminders", "daily reminder list", "list of reminders", "routine list", "my routines")
 - LOG_ACTIVITY: User logs a completed activity (keywords: "done", "completed", "finished", "logged", "tracked")
 - CREATE_ROUTINE: User creates a daily/weekly/monthly routine (keywords: "every day", "daily routine", "daily", "weekly" - EXCEPT if asking for a list)
-- CREATE_GOAL: User wants to achieve a goal and needs a plan (keywords: "goal", "target", "plan", "prepare", "achieve", "weight loss", "exam", "learn")
+- CREATE_GOAL: User wants to achieve a goal and needs a plan (keywords: "goal", "target", "plan", "prepare", "achieve", "weight loss", "exam", "learn", "become", "want to be", "I want to")
 - QUERY_GOALS: User wants to check goal progress or subtasks (keywords: "my goals", "goal progress", "how am I doing", "what are my subtasks", "tasks", "my tasks")
 - UPDATE_REMINDER: User wants to change a reminder (keywords: "update reminder", "change reminder for")
 - DELETE_REMINDER: User wants to delete a reminder (keywords: "delete reminder", "remove all reminders", "cancel")
@@ -73,6 +73,8 @@ EXAMPLES:
 - "I did workout today" → LOG_ACTIVITY, activity: "workout"
 - "Daily morning jog at 6 AM" → CREATE_ROUTINE, activity: "morning jog", time: "6 AM"
 
+RULE for Updates/Deletions: If the user says something like "update 2", "number 2", "edit 1", look at the 'lastAssistantMessage' in Context, find the item numbered 2/1, and extract its actual activity name for the 'activity' field instead of just the number.
+
 Return ONLY valid JSON (no markdown, no code blocks):
 {
   "intent": "CREATE_REMINDER|LOG_ACTIVITY|CHAT|QUERY_ROUTINE|DELETE_REMINDER|UPDATE_REMINDER|UPDATE_ROUTINE|DELETE_ROUTINE|CREATE_ROUTINE|QUERY_REMINDERS|CREATE_GOAL|QUERY_GOALS|CREATE_CLIENT|LOG_INVOICE|SCHEDULE_MEETING|LOG_LEAD|CREATE_PROJECT",
@@ -84,7 +86,7 @@ Return ONLY valid JSON (no markdown, no code blocks):
   }
 }
 
-Context: ${JSON.stringify(context)}`;
+Context: ${JSON.stringify(context, null, 2)}`;
       } else if (lang === 'hindi') {
         systemPrompt = `आप LifeOS AI सहायक हो। संदेश से intent और entities निकालो।
 
@@ -93,7 +95,7 @@ INTENT परिभाषाएं:
 - QUERY_REMINDERS: User अपने reminder या routine देखना चाहता है (शब्द: "mere reminders", "show reminders", "daily reminder list", "routine list")
 - LOG_ACTIVITY: किया हुआ काम दर्ज करना (शब्द: "done", "किया", "complete", "finished")
 - CREATE_ROUTINE: दैनिक/साप्ताहिक routine बनाना (शब्द: "हर दिन", "रोज़", "daily", "weekly" - छोड़कर जब list मांगी गई हो)
-- CREATE_GOAL: लक्ष्य प्राप्त करना (शब्द: "goal", "target", "plan", "prepare", "लक्ष्य")
+- CREATE_GOAL: लक्ष्य प्राप्त करना (शब्द: "goal", "target", "plan", "prepare", "लक्ष्य", "बनना", "करना चाहता हूँ", "I want to")
 - QUERY_GOALS: लक्ष्य की प्रगति देखना (शब्द: "मेरे goals", "progress")
 - UPDATE_REMINDER: Reminder बदलना (शब्द: "update reminder", "change reminder for")
 - DELETE_REMINDER: Reminder हटाना (शब्द: "delete reminder", "remove all reminders", "cancel")
@@ -108,6 +110,8 @@ INTENT परिभाषाएं:
 - "आज workout कर लिया" → LOG_ACTIVITY
 - "रोज़ सुबह 6 बजे दौड़ना" → CREATE_ROUTINE
 
+नियम (Rule): यदि user "update 2" या "number 2" कहता है, तो Context में 'lastAssistantMessage' देखें और सूची से उस नंबर की गतिविधि (activity) का असली नाम निकालें।
+
 केवल JSON लौटाओ:
 {
   "intent": "CREATE_REMINDER|LOG_ACTIVITY|CHAT|QUERY_ROUTINE|DELETE_REMINDER|UPDATE_REMINDER|UPDATE_ROUTINE|DELETE_ROUTINE|CREATE_ROUTINE|QUERY_REMINDERS|CREATE_GOAL|QUERY_GOALS|CREATE_CLIENT|LOG_INVOICE|SCHEDULE_MEETING|LOG_LEAD|CREATE_PROJECT",
@@ -117,7 +121,9 @@ INTENT परिभाषाएं:
   "entities": {
     "repeat": "none|daily|weekly|monthly"
   }
-}`;
+}
+
+Context: ${JSON.stringify(context, null, 2)}`;
       } else {
         // Hinglish
         systemPrompt = `You are LifeOS AI assistant. Intent aur entities nikalo message se.
@@ -127,7 +133,7 @@ INTENT DEFINITIONS:
 - QUERY_REMINDERS: User ko apne reminders ya routines dekhne hain (keywords: "mere reminders", "show reminders", "kya reminders list", "routine list")
 - LOG_ACTIVITY: Activity complete karna (keywords: "done", "kiya", "complete", "finished")
 - CREATE_ROUTINE: Daily/weekly routine banao (keywords: "har din", "roz", "daily", "weekly" - Note: agar list mangi hai to QUERY_REMINDERS)
-- CREATE_GOAL: Goal achieve karna (keywords: "goal", "target", "plan", "prepare", "achieve")
+- CREATE_GOAL: Goal achieve karna (keywords: "goal", "target", "plan", "prepare", "achieve", "become", "banna", "karna hai", "I want to")
 - QUERY_GOALS: Goal progress dekhna (keywords: "mere goals", "goal progress")
 - UPDATE_REMINDER: Reminder change karna (keywords: "update reminder", "change reminder for")
 - DELETE_REMINDER: Reminder delete karna (keywords: "delete reminder", "remove all reminders", "cancel")
@@ -145,6 +151,8 @@ Examples:
 - "what are my subtasks" → QUERY_GOALS
 - "give me my tasks" → QUERY_GOALS
 
+Rule: Agar user "update 2", "change 1" jaise numbers bole, toh Context mein 'lastAssistantMessage' dekh kar us number wali activity ka actual naam nikal kar 'activity' field mein daale.
+
 Return ONLY JSON:
 {
   "intent": "CREATE_REMINDER|LOG_ACTIVITY|CHAT|QUERY_ROUTINE|DELETE_REMINDER|UPDATE_REMINDER|UPDATE_ROUTINE|DELETE_ROUTINE|CREATE_ROUTINE|QUERY_REMINDERS|CREATE_GOAL|QUERY_GOALS|CREATE_CLIENT|LOG_INVOICE|SCHEDULE_MEETING|LOG_LEAD|CREATE_PROJECT",
@@ -154,7 +162,9 @@ Return ONLY JSON:
   "entities": {
     "repeat": "none|daily|weekly|monthly"
   }
-}`;
+}
+
+Context: ${JSON.stringify(context, null, 2)}`;
       }
 
       const msgs = [

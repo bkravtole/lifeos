@@ -383,9 +383,14 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
       const pendingAction = context.context?.pendingAction;
       const isPendingValid = pendingAction && (Date.now() - new Date(pendingAction.startedAt).getTime() < 15 * 60 * 1000); // 15 min expiry
       
+      const lastAssistantMessage = context.messages && Array.isArray(context.messages) 
+        ? context.messages.slice().reverse().find(m => m.role === 'assistant')?.content 
+        : null;
+
       aiResult = await aiEngine.detectIntent(processedMessage.text, {
         lastActivity: context.context.lastActivity,
-        missedActivities: context.context.missedActivities
+        missedActivities: context.context.missedActivities,
+        lastAssistantMessage: lastAssistantMessage
       });
 
       // GREETING CHECK: If simple greeting, clear status instead of merging
