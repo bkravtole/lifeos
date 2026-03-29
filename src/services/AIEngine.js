@@ -60,6 +60,8 @@ export class AIEngine {
       const transcription = await this.groq.audio.transcriptions.create({
         file: fs.createReadStream(tempFilePath),
         model: "whisper-large-v3-turbo",
+        language: "hi",
+        prompt: "Hindi, Hinglish, English. Use Devanagari or Latin script only.",
       });
       
       logger.info('🎧 Audio transcribed successfully:', transcription.text);
