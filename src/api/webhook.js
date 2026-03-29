@@ -1007,9 +1007,12 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
             const isGeneric = ['goal', 'goals', 'subtask', 'subtasks', 'task', 'tasks', 'my goals', 'progress', 'list', 'null', 'none', 'unknown'].includes(activity);
             
             if (activity && !isGeneric) {
+              const searchTerms = activity.replace(/\b(goal|my|the|a|an)\b/gi, '').trim().split(/\s+/).filter(w => w.length > 2);
               targetGoal = goals.find(g => {
                 const titleLower = g.title.toLowerCase();
-                return activity.includes(titleLower) || titleLower.includes(activity);
+                if (activity.includes(titleLower) || titleLower.includes(activity)) return true;
+                if (searchTerms.length > 0 && searchTerms.some(term => titleLower.includes(term))) return true;
+                return false;
               });
             }
             
@@ -1050,9 +1053,12 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
             const goals = await GoalService.getUserGoals(user._id);
             let match = null;
             if (activity && activity !== 'goal' && activity !== 'null') {
+              const searchTerms = activity.replace(/\b(goal|my|the|a|an)\b/gi, '').trim().split(/\s+/).filter(w => w.length > 2);
               match = goals.find(g => {
                 const titleLower = g.title.toLowerCase();
-                return activity.includes(titleLower) || titleLower.includes(activity);
+                if (activity.includes(titleLower) || titleLower.includes(activity)) return true;
+                if (searchTerms.length > 0 && searchTerms.some(term => titleLower.includes(term))) return true;
+                return false;
               });
             }
 
@@ -1092,9 +1098,12 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
 
             let match = null;
             if (activity && activity !== 'goal' && activity !== 'null') {
+              const searchTerms = activity.replace(/\b(goal|my|the|a|an)\b/gi, '').trim().split(/\s+/).filter(w => w.length > 2);
               match = goals.find(g => {
                 const titleLower = g.title.toLowerCase();
-                return activity.includes(titleLower) || titleLower.includes(activity);
+                if (activity.includes(titleLower) || titleLower.includes(activity)) return true;
+                if (searchTerms.length > 0 && searchTerms.some(term => titleLower.includes(term))) return true;
+                return false;
               });
             }
 
