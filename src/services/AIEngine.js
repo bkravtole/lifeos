@@ -90,7 +90,8 @@ export class AIEngine {
         systemPrompt = `You are LifeOS AI assistant. Extract intent and entities from user message with high accuracy.
 
 INTENT DEFINITIONS:
-- CREATE_REMINDER: User wants to be reminded to do something at a specific time (keywords: "remind me", "set reminder", "call", "message", "alarm", "notify", "at [time]")
+- CREATE_REMINDER: User wants to be reminded to do something at a specific time (keywords: "remind me", "set reminder", "alarm", "notify", "at [time]"). DO NOT use this for immediate call requests.
+- MAKE_CALL: User wants to call someone RIGHT NOW (keywords: "call [person]", "phone [person]", "dial [person]", "contact [person]").
 - QUERY_REMINDERS: User wants to see their list of reminders or routines (keywords: "what are my reminders", "show reminders", "daily reminder list", "list of reminders", "routine list", "my routines")
 - LOG_ACTIVITY: User logs a completed activity (keywords: "done", "completed", "finished", "logged", "tracked")
 - CREATE_ROUTINE: User creates a daily/weekly/monthly routine (keywords: "every day", "daily routine", "daily", "weekly" - EXCEPT if asking for a list)
@@ -102,9 +103,8 @@ INTENT DEFINITIONS:
 - DELETE_REMINDER: User wants to delete a reminder (keywords: "delete reminder", "remove all reminders", "cancel")
 - UPDATE_ROUTINE: User wants to change a routine (keywords: "update routine", "change routine")
 - DELETE_ROUTINE: User wants to delete a routine (keywords: "delete routine", "stop routine")
-- MAKE_CALL: User wants to call someone RIGHT NOW (keywords: "call [person]", "phone [person]", "dial [person]" - NOT "remind me to call" which is CREATE_REMINDER)
 - SAVE_CONTACT: User wants to save a new contact (keywords: "save contact", "save number", "add contact")
-- CHAT: General conversation, question, or unclear intent
+- CHAT: General conversation, greetings, or question. DO NOT use this if the user asks to call or save a contact.
 - Other intents: CREATE_CLIENT, LOG_INVOICE, SCHEDULE_MEETING, LOG_LEAD, CREATE_PROJECT
 
 EXAMPLES:
@@ -136,7 +136,8 @@ Context: ${JSON.stringify(context, null, 2)}`;
         systemPrompt = `आप LifeOS AI सहायक हो। संदेश से intent और entities निकालो।
 
 INTENT परिभाषाएं:
-- CREATE_REMINDER: User को किसी समय कुछ करने के लिए याद दिलाना (शब्द: "remind me", "याद दिलाना", "कॉल", "alert", "[समय] पर")
+- CREATE_REMINDER: User को किसी समय कुछ करने के लिए याद दिलाना (शब्द: "remind me", "याद दिलाना", "alert", "[समय] पर"). इसे कॉल करने के लिए उपयोग न करें।
+- MAKE_CALL: User अभी किसी को कॉल करना चाहता है (शब्द: "call [व्यक्ति]", "[व्यक्ति] को कॉल करो", "dial", "number lagao").
 - QUERY_REMINDERS: User अपने reminder या routine देखना चाहता है (शब्द: "mere reminders", "show reminders", "daily reminder list", "routine list")
 - LOG_ACTIVITY: किया हुआ काम दर्ज करना (शब्द: "done", "किया", "complete", "finished")
 - CREATE_ROUTINE: दैनिक/साप्ताहिक routine बनाना (शब्द: "हर दिन", "रोज़", "daily", "weekly" - छोड़कर जब list मांगी गई हो)
@@ -148,9 +149,8 @@ INTENT परिभाषाएं:
 - DELETE_REMINDER: Reminder हटाना (शब्द: "delete reminder", "remove all reminders", "cancel")
 - UPDATE_ROUTINE: Routine बदलना (शब्द: "update routine", "change routine")
 - DELETE_ROUTINE: Routine हटाना (शब्द: "delete routine", "stop routine")
-- MAKE_CALL: User अभी किसी को कॉल करना चाहता है (शब्द: "call [व्यक्ति]", "[व्यक्ति] को कॉल करो" - "याद दिलाओ" वाला CREATE_REMINDER है)
 - SAVE_CONTACT: नया contact सेव करना (शब्द: "save contact", "number save karo", "contact save")
-- CHAT: सामान्य बातचीत
+- CHAT: सामान्य बातचीत। यदि उपयोगकर्ता कॉल करने या संपर्क सहेजने के लिए कहता है तो इसका उपयोग न करें।
 
 उदाहरण:
 - "आज 6:55 बजे मुझे अपने भाई को कॉल करने के लिए याद दिलाना" → CREATE_REMINDER
@@ -181,7 +181,8 @@ Context: ${JSON.stringify(context, null, 2)}`;
         systemPrompt = `You are LifeOS AI assistant. Intent aur entities nikalo message se.
 
 INTENT DEFINITIONS:
-- CREATE_REMINDER: Remind karna user ko kuch karne ke liye (keywords: "remind me", "yaad dilao", "call", "karo", "[time] par")
+- CREATE_REMINDER: Remind karna user ko kuch karne ke liye (keywords: "remind me", "yaad dilao", "alert", "[time] par"). Call dial ke liye iska use na kare.
+- MAKE_CALL: User abhi kisi ko call karna chahta hai (keywords: "call [person]", "[person] ko call karo", "number dial karo").
 - QUERY_REMINDERS: User ko apne reminders ya routines dekhne hain (keywords: "mere reminders", "show reminders", "kya reminders list", "routine list")
 - LOG_ACTIVITY: Activity complete karna (keywords: "done", "kiya", "complete", "finished")
 - CREATE_ROUTINE: Daily/weekly routine banao (keywords: "har din", "roz", "daily", "weekly" - Note: agar list mangi hai to QUERY_REMINDERS)
@@ -193,9 +194,8 @@ INTENT DEFINITIONS:
 - DELETE_REMINDER: Reminder delete karna (keywords: "delete reminder", "remove all reminders", "cancel")
 - UPDATE_ROUTINE: Routine change karna (keywords: "update routine", "change routine")
 - DELETE_ROUTINE: Routine delete karna (keywords: "delete routine", "stop routine")
-- MAKE_CALL: User abhi kisi ko call karna chahta hai (keywords: "call [person]", "[person] ko call karo" - "yaad dilao" wala CREATE_REMINDER hai)
-- SAVE_CONTACT: Naya contact save karna (keywords: "save contact", "number save karo", "contact add karo")
-- CHAT: General baat cheet
+- SAVE_CONTACT: Naya contact save karo (keywords: "save contact", "number save karo", "contact add karo")
+- CHAT: General baat cheet. Agar user call ya contact save karne bole to CHAT use mat karna.
 
 Examples:
 - "Set a reminder to call my brother at 6:55 pm today" → CREATE_REMINDER, activity: "call brother", time: "6:55 pm today"

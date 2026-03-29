@@ -1461,6 +1461,13 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
         logger.info('🛑 Request is incomplete. Handler already sent clarification. Stopping generic response flow.');
         return res.status(200).json({ status: 'ok', handled: 'incomplete' });
       }
+
+      // NEW: Stop if these specific intents were handled successfully
+      const handledIntents = ['MAKE_CALL', 'SAVE_CONTACT'];
+      if (routeResult && routeResult.success && handledIntents.includes(aiResult.intent)) {
+        logger.info(`✅ Intent ${aiResult.intent} handled successfully. Stopping generic response flow.`);
+        return res.status(200).json({ status: 'ok', handled: aiResult.intent });
+      }
     } catch (error) {
       logger.warn('Route handling failed:', error.message);
     }
