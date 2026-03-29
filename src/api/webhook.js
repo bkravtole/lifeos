@@ -993,25 +993,52 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
             return { success: false, error: error.message };
           }
         },
-        queryGoals: async () => {
+        queryGoals: async (entities) => {
           try {
             const goals = await GoalService.getUserGoals(user._id);
             if (goals.length === 0) {
               return { success: true, data: { formatted: '', count: 0 } };
             }
 
-            let formatted = `🎯 Your Goals (${goals.length})\n`;
-            for (const goal of goals) {
-              const progressBar = '█'.repeat(Math.floor(goal.progress / 10)) + '░'.repeat(10 - Math.floor(goal.progress / 10));
-              formatted += `\n📌 **${goal.title}**\n   ${progressBar} ${goal.progress}%`;
-              if (goal.subTasks.length > 0) {
-                const done = goal.subTasks.filter(t => t.status === 'completed').length;
-                formatted += ` (${done}/${goal.subTasks.length} tasks)`;
+            let formatted = '';
+            let targetGoal = null;
+            
+            const activity = entities?.activity?.toLowerCase() || '';
+            const isGeneric = ['goal', 'goals', 'subtask', 'subtasks', 'task', 'tasks', 'my goals', 'progress', 'list', 'null', 'none', 'unknown'].includes(activity);
+            
+            if (activity && !isGeneric) {
+              targetGoal = goals.find(g => {
+                const titleLower = g.title.toLowerCase();
+                return activity.includes(titleLower) || titleLower.includes(activity);
+              });
+            }
+            
+            if (targetGoal) {
+              formatted = `📌 **${targetGoal.title}** (Sub-tasks)\n`;
+              if (targetGoal.subTasks.length === 0) {
+                 formatted += `\nNo tasks found.`;
+              } else {
+                 targetGoal.subTasks.forEach((t, i) => {
+                   const icon = t.status === 'completed' ? '✅' : (t.type === 'routine' ? '🔄' : '⏰');
+                   formatted += `\n${i + 1}. ${icon} ${t.title} @ ${t.time || 'flexible'}`;
+                 });
+              }
+              const progressBar = '█'.repeat(Math.floor(targetGoal.progress / 10)) + '░'.repeat(10 - Math.floor(targetGoal.progress / 10));
+              formatted += `\n\nProgress: ${progressBar} ${targetGoal.progress}%`;
+            } else {
+              formatted = `🎯 Your Goals (${goals.length})\n`;
+              for (const goal of goals) {
+                const progressBar = '█'.repeat(Math.floor(goal.progress / 10)) + '░'.repeat(10 - Math.floor(goal.progress / 10));
+                formatted += `\n📌 **${goal.title}**\n   ${progressBar} ${goal.progress}%`;
+                if (goal.subTasks.length > 0) {
+                  const done = goal.subTasks.filter(t => t.status === 'completed').length;
+                  formatted += ` (${done}/${goal.subTasks.length} tasks)`;
+                }
               }
             }
 
             await ContextEngine.clearPendingAction(user._id);
-            return { success: true, data: { formatted, count: goals.length } };
+            return { success: true, data: { formatted, count: targetGoal ? 1 : goals.length } };
           } catch (error) {
             logger.error('Failed to query goals:', error.message);
             return { success: false };
