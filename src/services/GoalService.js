@@ -153,12 +153,43 @@ export class GoalService {
   }
 
   /**
-   * Delete a goal
+   * Update a goal details
+   */
+  static async updateGoal(goalId, data) {
+    try {
+      const goal = await Goal.findByIdAndUpdate(goalId, data, { new: true });
+      logger.info('🎯 Goal updated:', { goalId });
+      return goal;
+    } catch (error) {
+      logger.error('Failed to update goal:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a goal and its associated tasks
    */
   static async deleteGoal(goalId) {
     try {
+      const goal = await Goal.findById(goalId);
+      if (!goal) return { success: false, error: 'Goal not found' };
+
+      // Delete associated routines and reminders
+      for (const task of goal.subTasks) {
+        try {
+          if (task.linkedRoutineId) {
+            await RoutineService.deleteRoutine(task.linkedRoutineId);
+          }
+          if (task.linkedReminderId) {
+            await ReminderService.deleteReminder(task.linkedReminderId);
+          }
+        } catch (e) {
+          logger.warn(`Failed to delete linked task ${task.title}:`, e.message);
+        }
+      }
+
       await Goal.findByIdAndDelete(goalId);
-      logger.info('🎯 Goal deleted:', { goalId });
+      logger.info('🎯 Goal and subtasks deleted:', { goalId });
       return { success: true };
     } catch (error) {
       logger.error('Failed to delete goal:', error.message);

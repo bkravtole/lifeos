@@ -1043,6 +1043,72 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
             logger.error('Failed to query goals:', error.message);
             return { success: false };
           }
+        },
+        updateGoal: async (entities) => {
+          try {
+            const activity = entities.activity?.toLowerCase() || '';
+            const goals = await GoalService.getUserGoals(user._id);
+            let match = null;
+            if (activity && activity !== 'goal' && activity !== 'null') {
+              match = goals.find(g => {
+                const titleLower = g.title.toLowerCase();
+                return activity.includes(titleLower) || titleLower.includes(activity);
+              });
+            }
+
+            if (match) {
+              const updateData = {};
+              if (entities.time && entities.time !== 'null') updateData.deadline = entities.time;
+              if (entities.datetime && entities.datetime !== 'null') updateData.deadline = entities.datetime;
+              
+              if (Object.keys(updateData).length === 0) {
+                 return { success: false, incomplete: true, error: 'nothing_to_update' };
+              }
+              const goal = await GoalService.updateGoal(match._id, updateData);
+              await ContextEngine.clearPendingAction(user._id);
+              return { success: true, updated: match.title, data: goal };
+            }
+            return { success: false, error: 'Could not find a matching goal to update.' };
+          } catch (error) {
+            logger.error('Failed to update goal:', error.message);
+            return { success: false };
+          }
+        },
+        deleteGoal: async (entities) => {
+          try {
+            const rawText = processedMessage.text.toLowerCase();
+            const activity = entities.activity?.toLowerCase() || '';
+            const isAll = activity.includes('all') || activity === 'everything' || activity === 'sab' ||
+                         rawText.includes('all') || rawText.includes('everything') || rawText.includes('sab') || rawText.includes('saare');
+            
+            const goals = await GoalService.getUserGoals(user._id);
+            if (isAll) {
+              for (const g of goals) {
+                await GoalService.deleteGoal(g._id);
+              }
+              await ContextEngine.clearPendingAction(user._id);
+              return { success: true, deleted: 'all goals' };
+            }
+
+            let match = null;
+            if (activity && activity !== 'goal' && activity !== 'null') {
+              match = goals.find(g => {
+                const titleLower = g.title.toLowerCase();
+                return activity.includes(titleLower) || titleLower.includes(activity);
+              });
+            }
+
+            if (match) {
+              await GoalService.deleteGoal(match._id);
+              await ContextEngine.clearPendingAction(user._id);
+              return { success: true, deleted: match.title };
+            }
+
+            return { success: false, error: 'Could not find a matching goal to delete.' };
+          } catch (error) {
+            logger.error('Failed to delete goal:', error.message);
+            return { success: false };
+          }
         }
       },
 

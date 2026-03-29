@@ -59,6 +59,8 @@ INTENT DEFINITIONS:
 - CREATE_ROUTINE: User creates a daily/weekly/monthly routine (keywords: "every day", "daily routine", "daily", "weekly" - EXCEPT if asking for a list)
 - CREATE_GOAL: User wants to achieve a goal and needs a plan (keywords: "goal", "target", "plan", "prepare", "achieve", "weight loss", "exam", "learn", "become", "want to be", "I want to")
 - QUERY_GOALS: User wants to check goal progress or subtasks (keywords: "my goals", "goal progress", "how am I doing", "what are my subtasks", "tasks", "my tasks")
+- UPDATE_GOAL: User wants to change a goal (keywords: "update goal", "change goal")
+- DELETE_GOAL: User wants to delete a goal (keywords: "delete goal", "remove goal", "drop goal")
 - UPDATE_REMINDER: User wants to change a reminder (keywords: "update reminder", "change reminder for")
 - DELETE_REMINDER: User wants to delete a reminder (keywords: "delete reminder", "remove all reminders", "cancel")
 - UPDATE_ROUTINE: User wants to change a routine (keywords: "update routine", "change routine")
@@ -77,7 +79,7 @@ RULE for Updates/Deletions: If the user says something like "update 2", "number 
 
 Return ONLY valid JSON (no markdown, no code blocks):
 {
-  "intent": "CREATE_REMINDER|LOG_ACTIVITY|CHAT|QUERY_ROUTINE|DELETE_REMINDER|UPDATE_REMINDER|UPDATE_ROUTINE|DELETE_ROUTINE|CREATE_ROUTINE|QUERY_REMINDERS|CREATE_GOAL|QUERY_GOALS|CREATE_CLIENT|LOG_INVOICE|SCHEDULE_MEETING|LOG_LEAD|CREATE_PROJECT",
+  "intent": "CREATE_REMINDER|LOG_ACTIVITY|CHAT|QUERY_ROUTINE|DELETE_REMINDER|UPDATE_REMINDER|UPDATE_ROUTINE|DELETE_ROUTINE|CREATE_ROUTINE|QUERY_REMINDERS|CREATE_GOAL|QUERY_GOALS|UPDATE_GOAL|DELETE_GOAL|CREATE_CLIENT|LOG_INVOICE|SCHEDULE_MEETING|LOG_LEAD|CREATE_PROJECT",
   "confidence": 0.90,
   "activity": "what user wants to do",
   "time": "when user wants to do it (extract from message)",
@@ -97,6 +99,8 @@ INTENT परिभाषाएं:
 - CREATE_ROUTINE: दैनिक/साप्ताहिक routine बनाना (शब्द: "हर दिन", "रोज़", "daily", "weekly" - छोड़कर जब list मांगी गई हो)
 - CREATE_GOAL: लक्ष्य प्राप्त करना (शब्द: "goal", "target", "plan", "prepare", "लक्ष्य", "बनना", "करना चाहता हूँ", "I want to")
 - QUERY_GOALS: लक्ष्य की प्रगति देखना (शब्द: "मेरे goals", "progress")
+- UPDATE_GOAL: लक्ष्य बदलना (शब्द: "update goal", "change goal")
+- DELETE_GOAL: लक्ष्य हटाना (शब्द: "delete goal", "लक्ष्य हटाओ", "remove goal")
 - UPDATE_REMINDER: Reminder बदलना (शब्द: "update reminder", "change reminder for")
 - DELETE_REMINDER: Reminder हटाना (शब्द: "delete reminder", "remove all reminders", "cancel")
 - UPDATE_ROUTINE: Routine बदलना (शब्द: "update routine", "change routine")
@@ -114,7 +118,7 @@ INTENT परिभाषाएं:
 
 केवल JSON लौटाओ:
 {
-  "intent": "CREATE_REMINDER|LOG_ACTIVITY|CHAT|QUERY_ROUTINE|DELETE_REMINDER|UPDATE_REMINDER|UPDATE_ROUTINE|DELETE_ROUTINE|CREATE_ROUTINE|QUERY_REMINDERS|CREATE_GOAL|QUERY_GOALS|CREATE_CLIENT|LOG_INVOICE|SCHEDULE_MEETING|LOG_LEAD|CREATE_PROJECT",
+  "intent": "CREATE_REMINDER|LOG_ACTIVITY|CHAT|QUERY_ROUTINE|DELETE_REMINDER|UPDATE_REMINDER|UPDATE_ROUTINE|DELETE_ROUTINE|CREATE_ROUTINE|QUERY_REMINDERS|CREATE_GOAL|QUERY_GOALS|UPDATE_GOAL|DELETE_GOAL|CREATE_CLIENT|LOG_INVOICE|SCHEDULE_MEETING|LOG_LEAD|CREATE_PROJECT",
   "confidence": 0.90,
   "activity": "क्या करना है",
   "time": "कब करना है",
@@ -135,6 +139,8 @@ INTENT DEFINITIONS:
 - CREATE_ROUTINE: Daily/weekly routine banao (keywords: "har din", "roz", "daily", "weekly" - Note: agar list mangi hai to QUERY_REMINDERS)
 - CREATE_GOAL: Goal achieve karna (keywords: "goal", "target", "plan", "prepare", "achieve", "become", "banna", "karna hai", "I want to")
 - QUERY_GOALS: Goal progress dekhna (keywords: "mere goals", "goal progress")
+- UPDATE_GOAL: Goal change karna (keywords: "update goal", "change goal")
+- DELETE_GOAL: Goal delete karna (keywords: "delete goal", "remove goal", "drop goal")
 - UPDATE_REMINDER: Reminder change karna (keywords: "update reminder", "change reminder for")
 - DELETE_REMINDER: Reminder delete karna (keywords: "delete reminder", "remove all reminders", "cancel")
 - UPDATE_ROUTINE: Routine change karna (keywords: "update routine", "change routine")
@@ -155,7 +161,7 @@ Rule: Agar user "update 2", "change 1" jaise numbers bole, toh Context mein 'las
 
 Return ONLY JSON:
 {
-  "intent": "CREATE_REMINDER|LOG_ACTIVITY|CHAT|QUERY_ROUTINE|DELETE_REMINDER|UPDATE_REMINDER|UPDATE_ROUTINE|DELETE_ROUTINE|CREATE_ROUTINE|QUERY_REMINDERS|CREATE_GOAL|QUERY_GOALS|CREATE_CLIENT|LOG_INVOICE|SCHEDULE_MEETING|LOG_LEAD|CREATE_PROJECT",
+  "intent": "CREATE_REMINDER|LOG_ACTIVITY|CHAT|QUERY_ROUTINE|DELETE_REMINDER|UPDATE_REMINDER|UPDATE_ROUTINE|DELETE_ROUTINE|CREATE_ROUTINE|QUERY_REMINDERS|CREATE_GOAL|QUERY_GOALS|UPDATE_GOAL|DELETE_GOAL|CREATE_CLIENT|LOG_INVOICE|SCHEDULE_MEETING|LOG_LEAD|CREATE_PROJECT",
   "confidence": 0.90,
   "activity": "kya karna hai",
   "time": "kab karna hai",
@@ -356,7 +362,7 @@ Context: ${JSON.stringify(context, null, 2)}`;
         }
       }
 
-      if (intent === 'DELETE_REMINDER' || intent === 'DELETE_ROUTINE') {
+      if (intent === 'DELETE_REMINDER' || intent === 'DELETE_ROUTINE' || intent === 'DELETE_GOAL') {
         if (routeResult?.success === false) {
           if (lang === 'hindi') return `❌ मुझे डिलीट करने के लिए वह नहीं मिला।`;
           if (lang === 'hinglish') return `❌ Mujhe delete karne ke liye wo nahi mila.`;
@@ -369,7 +375,7 @@ Context: ${JSON.stringify(context, null, 2)}`;
         return `✅ Done! I've deleted **${deletedItem}**. 🗑️`;
       }
       
-      if (intent === 'UPDATE_REMINDER' || intent === 'UPDATE_ROUTINE') {
+      if (intent === 'UPDATE_REMINDER' || intent === 'UPDATE_ROUTINE' || intent === 'UPDATE_GOAL') {
         if (routeResult?.success === false) {
           if (lang === 'hindi') return `❌ मुझे अपडेट करने के लिए वह नहीं मिला।`;
           if (lang === 'hinglish') return `❌ Mujhe update karne ke liye wo nahi mila.`;

@@ -41,6 +41,12 @@ export class IntentRouter {
         case 'CREATE_GOAL':
           return await handlers.goalService?.createGoal(entities);
 
+        case 'UPDATE_GOAL':
+          return await handlers.goalService?.updateGoal(entities);
+
+        case 'DELETE_GOAL':
+          return await handlers.goalService?.deleteGoal(entities);
+
         case 'QUERY_GOALS':
           return await handlers.goalService?.queryGoals(entities);
 
@@ -69,6 +75,8 @@ export class IntentRouter {
       'UPDATE_ROUTINE': 4,
       'DELETE_ROUTINE': 4,
       'CREATE_GOAL': 3,
+      'UPDATE_GOAL': 4,
+      'DELETE_GOAL': 4,
       'QUERY_GOALS': 5,
       'CHAT': 5,
       'QUERY_ROUTINE': 6
