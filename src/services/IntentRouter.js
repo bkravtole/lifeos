@@ -50,6 +50,12 @@ export class IntentRouter {
         case 'QUERY_GOALS':
           return await handlers.goalService?.queryGoals(entities);
 
+        case 'MAKE_CALL':
+          return await handlers.contactService?.makeCall(entities);
+
+        case 'SAVE_CONTACT':
+          return await handlers.contactService?.saveContact(entities);
+
         case 'CHAT':
           return await handlers.chatService?.chat(entities);
 

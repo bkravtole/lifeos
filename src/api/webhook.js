@@ -12,6 +12,7 @@ import OnboardingService from '../services/OnboardingService.js';
 import OnDemandScheduler from '../services/OnDemandScheduler.js';
 import GoalService from '../services/GoalService.js';
 import MemoryService from '../services/MemoryService.js';
+import ContactService from '../services/ContactService.js';
 import User from '../models/User.js';
 import Reminder from '../models/Reminder.js';
 import logger from '../utils/logger.js';
@@ -1347,6 +1348,87 @@ router.post('/whatsapp', verifyWebhookSignature, async (req, res) => {
           } catch (error) {
             logger.error('Failed to query reminders:', error.message);
             return { success: false, error: error.message };
+          }
+        },
+        contactService: {
+          makeCall: async (entities) => {
+            try {
+              const person = entities.activity || '';
+              if (!person || person === 'null') {
+                await whatsappService.sendMessage(rawMessage.from, "🤔 Who do you want to call? Please tell me their name.");
+                return { success: false, incomplete: true };
+              }
+
+              const contact = await ContactService.findContact(user._id, person);
+              if (contact) {
+                const lang = aiEngine.detectLanguage(processedMessage.text);
+                let msg = `📞 Calling **${contact.name}**...\n\n👉 Tap here to call: tel:${contact.phone}`;
+                if (lang === 'hindi' || lang === 'hinglish') {
+                  msg = `📞 **${contact.name}** ko call kar raha hoon...\n\n👉 Call karne ke liye yahan tap karein: tel:${contact.phone}`;
+                }
+                
+                await whatsappService.sendMessage(rawMessage.from, msg);
+                return { success: true, callStarted: true, contact: contact.name };
+              } else {
+                const lang = aiEngine.detectLanguage(processedMessage.text);
+                let msg = `🤔 I couldn't find a contact named "${person}".\n\nTo save it, say: "save ${person}'s number [phone_number]"`;
+                if (lang === 'hindi' || lang === 'hinglish') {
+                  msg = `🤔 Mujhe "${person}" ke naam se koi contact nahi mila.\n\nSave karne ke liye kahein: "${person} ka number save karo [phone_number]"`;
+                }
+                await whatsappService.sendMessage(rawMessage.from, msg);
+                return { success: false, error: 'contact_not_found' };
+              }
+            } catch (error) {
+              logger.error('Failed to make call:', error.message);
+              return { success: false, error: error.message };
+            }
+          },
+          saveContact: async (entities) => {
+            try {
+              const name = entities.activity || '';
+              const phone = entities.time || ''; // AI often puts the digits here
+
+              // If AI missed extracting, try a simple regex on the original text
+              let detectedPhone = phone;
+              if (!detectedPhone || !/\d{5,}/.test(detectedPhone)) {
+                const match = processedMessage.text.match(/(\d{5,15})/);
+                if (match) detectedPhone = match[1];
+              }
+
+              if (!name || name === 'null' || !detectedPhone) {
+                await whatsappService.sendMessage(rawMessage.from, "🤔 Please provide both name and phone number to save a contact. (e.g. 'save Rahul 9876543210')");
+                return { success: false, incomplete: true };
+              }
+
+              // Determine relationship and aliases if possible
+              let relationship = 'other';
+              const aliases = [];
+              const lowerText = processedMessage.text.toLowerCase();
+              if (lowerText.includes('bhai') || lowerText.includes('brother')) {
+                relationship = 'family';
+                aliases.push('bhai');
+              } else if (lowerText.includes('mom') || lowerText.includes('mummy')) {
+                relationship = 'family';
+                aliases.push('mom', 'mummy');
+              } else if (lowerText.includes('papa') || lowerText.includes('dad')) {
+                relationship = 'family';
+                aliases.push('papa', 'dad');
+              }
+
+              const result = await ContactService.saveContact(user._id, name, detectedPhone, relationship, aliases);
+              
+              const lang = aiEngine.detectLanguage(processedMessage.text);
+              let msg = `✅ Contact saved: **${name}** (${detectedPhone})`;
+              if (lang === 'hindi' || lang === 'hinglish') {
+                msg = `✅ Contact save ho gaya: **${name}** (${detectedPhone})`;
+              }
+              
+              await whatsappService.sendMessage(rawMessage.from, msg);
+              return { success: true, data: result.contact };
+            } catch (error) {
+              logger.error('Failed to save contact:', error.message);
+              return { success: false, error: error.message };
+            }
           }
         }
       }

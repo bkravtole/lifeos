@@ -16,7 +16,12 @@ async function test() {
     "muje mera developer goal delete karna hai",
     // 5. Normal reminders & routines
     "remind me to call jayesh today at 6pm",
-    "muje daily routine set karna he gyma jane ke liye 8 baje"
+    "muje daily routine set karna he gyma jane ke liye 8 baje",
+    // 6. Contact & Calling
+    "save Rahul's number 9876543210",
+    "bhai ka number save karo 9123456789",
+    "Rahul ko call karo",
+    "bhai ko call karna he"
   ];
 
   // Mocking the context to test the new line-number parsing rule

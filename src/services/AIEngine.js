@@ -102,6 +102,8 @@ INTENT DEFINITIONS:
 - DELETE_REMINDER: User wants to delete a reminder (keywords: "delete reminder", "remove all reminders", "cancel")
 - UPDATE_ROUTINE: User wants to change a routine (keywords: "update routine", "change routine")
 - DELETE_ROUTINE: User wants to delete a routine (keywords: "delete routine", "stop routine")
+- MAKE_CALL: User wants to call someone RIGHT NOW (keywords: "call [person]", "phone [person]", "dial [person]" - NOT "remind me to call" which is CREATE_REMINDER)
+- SAVE_CONTACT: User wants to save a new contact (keywords: "save contact", "save number", "add contact")
 - CHAT: General conversation, question, or unclear intent
 - Other intents: CREATE_CLIENT, LOG_INVOICE, SCHEDULE_MEETING, LOG_LEAD, CREATE_PROJECT
 
@@ -111,12 +113,16 @@ EXAMPLES:
 - "What about my daily reminder" → QUERY_REMINDERS
 - "I did workout today" → LOG_ACTIVITY, activity: "workout"
 - "Daily morning jog at 6 AM" → CREATE_ROUTINE, activity: "morning jog", time: "6 AM"
+- "call Rahul" → MAKE_CALL, activity: "Rahul"
+- "bhai ko call karo" → MAKE_CALL, activity: "bhai"
+- "Remind me to call Rahul at 5 PM" → CREATE_REMINDER (NOT MAKE_CALL because it says "remind me")
+- "save Rahul's number 9876543210" → SAVE_CONTACT, activity: "Rahul", time: "9876543210"
 
 RULE for Updates/Deletions: If the user says something like "update 2", "number 2", "edit 1", look at the 'lastAssistantMessage' in Context, find the item numbered 2/1, and extract its actual activity name for the 'activity' field instead of just the number.
 
 Return ONLY valid JSON (no markdown, no code blocks):
 {
-  "intent": "CREATE_REMINDER|LOG_ACTIVITY|CHAT|QUERY_ROUTINE|DELETE_REMINDER|UPDATE_REMINDER|UPDATE_ROUTINE|DELETE_ROUTINE|CREATE_ROUTINE|QUERY_REMINDERS|CREATE_GOAL|QUERY_GOALS|UPDATE_GOAL|DELETE_GOAL|CREATE_CLIENT|LOG_INVOICE|SCHEDULE_MEETING|LOG_LEAD|CREATE_PROJECT",
+  "intent": "CREATE_REMINDER|LOG_ACTIVITY|CHAT|QUERY_ROUTINE|DELETE_REMINDER|UPDATE_REMINDER|UPDATE_ROUTINE|DELETE_ROUTINE|CREATE_ROUTINE|QUERY_REMINDERS|CREATE_GOAL|QUERY_GOALS|UPDATE_GOAL|DELETE_GOAL|MAKE_CALL|SAVE_CONTACT|CREATE_CLIENT|LOG_INVOICE|SCHEDULE_MEETING|LOG_LEAD|CREATE_PROJECT",
   "confidence": 0.90,
   "activity": "what user wants to do",
   "time": "when user wants to do it (extract from message)",
@@ -142,6 +148,8 @@ INTENT परिभाषाएं:
 - DELETE_REMINDER: Reminder हटाना (शब्द: "delete reminder", "remove all reminders", "cancel")
 - UPDATE_ROUTINE: Routine बदलना (शब्द: "update routine", "change routine")
 - DELETE_ROUTINE: Routine हटाना (शब्द: "delete routine", "stop routine")
+- MAKE_CALL: User अभी किसी को कॉल करना चाहता है (शब्द: "call [व्यक्ति]", "[व्यक्ति] को कॉल करो" - "याद दिलाओ" वाला CREATE_REMINDER है)
+- SAVE_CONTACT: नया contact सेव करना (शब्द: "save contact", "number save karo", "contact save")
 - CHAT: सामान्य बातचीत
 
 उदाहरण:
@@ -150,12 +158,15 @@ INTENT परिभाषाएं:
 - "मेरे reminders क्या हैं?" → QUERY_REMINDERS
 - "आज workout कर लिया" → LOG_ACTIVITY
 - "रोज़ सुबह 6 बजे दौड़ना" → CREATE_ROUTINE
+- "राहुल को कॉल करो" → MAKE_CALL, activity: "राहुल"
+- "भाई को call करो" → MAKE_CALL, activity: "भाई"
+- "राहुल का number save करो 9876543210" → SAVE_CONTACT, activity: "राहुल", time: "9876543210"
 
 नियम (Rule): यदि user "update 2" या "number 2" कहता है, तो Context में 'lastAssistantMessage' देखें और सूची से उस नंबर की गतिविधि (activity) का असली नाम निकालें।
 
 केवल JSON लौटाओ:
 {
-  "intent": "CREATE_REMINDER|LOG_ACTIVITY|CHAT|QUERY_ROUTINE|DELETE_REMINDER|UPDATE_REMINDER|UPDATE_ROUTINE|DELETE_ROUTINE|CREATE_ROUTINE|QUERY_REMINDERS|CREATE_GOAL|QUERY_GOALS|UPDATE_GOAL|DELETE_GOAL|CREATE_CLIENT|LOG_INVOICE|SCHEDULE_MEETING|LOG_LEAD|CREATE_PROJECT",
+  "intent": "CREATE_REMINDER|LOG_ACTIVITY|CHAT|QUERY_ROUTINE|DELETE_REMINDER|UPDATE_REMINDER|UPDATE_ROUTINE|DELETE_ROUTINE|CREATE_ROUTINE|QUERY_REMINDERS|CREATE_GOAL|QUERY_GOALS|UPDATE_GOAL|DELETE_GOAL|MAKE_CALL|SAVE_CONTACT|CREATE_CLIENT|LOG_INVOICE|SCHEDULE_MEETING|LOG_LEAD|CREATE_PROJECT",
   "confidence": 0.90,
   "activity": "क्या करना है",
   "time": "कब करना है",
@@ -182,6 +193,8 @@ INTENT DEFINITIONS:
 - DELETE_REMINDER: Reminder delete karna (keywords: "delete reminder", "remove all reminders", "cancel")
 - UPDATE_ROUTINE: Routine change karna (keywords: "update routine", "change routine")
 - DELETE_ROUTINE: Routine delete karna (keywords: "delete routine", "stop routine")
+- MAKE_CALL: User abhi kisi ko call karna chahta hai (keywords: "call [person]", "[person] ko call karo" - "yaad dilao" wala CREATE_REMINDER hai)
+- SAVE_CONTACT: Naya contact save karna (keywords: "save contact", "number save karo", "contact add karo")
 - CHAT: General baat cheet
 
 Examples:
@@ -193,12 +206,16 @@ Examples:
 - "hi", "hello" → CHAT
 - "what are my subtasks" → QUERY_GOALS
 - "give me my tasks" → QUERY_GOALS
+- "Rahul ko call karo" → MAKE_CALL, activity: "Rahul"
+- "bhai ko call karo" → MAKE_CALL, activity: "bhai"
+- "Remind me to call Rahul 5 baje" → CREATE_REMINDER (NOT MAKE_CALL)
+- "Rahul ka number save karo 9876543210" → SAVE_CONTACT, activity: "Rahul", time: "9876543210"
 
 Rule: Agar user "update 2", "change 1" jaise numbers bole, toh Context mein 'lastAssistantMessage' dekh kar us number wali activity ka actual naam nikal kar 'activity' field mein daale.
 
 Return ONLY JSON:
 {
-  "intent": "CREATE_REMINDER|LOG_ACTIVITY|CHAT|QUERY_ROUTINE|DELETE_REMINDER|UPDATE_REMINDER|UPDATE_ROUTINE|DELETE_ROUTINE|CREATE_ROUTINE|QUERY_REMINDERS|CREATE_GOAL|QUERY_GOALS|UPDATE_GOAL|DELETE_GOAL|CREATE_CLIENT|LOG_INVOICE|SCHEDULE_MEETING|LOG_LEAD|CREATE_PROJECT",
+  "intent": "CREATE_REMINDER|LOG_ACTIVITY|CHAT|QUERY_ROUTINE|DELETE_REMINDER|UPDATE_REMINDER|UPDATE_ROUTINE|DELETE_ROUTINE|CREATE_ROUTINE|QUERY_REMINDERS|CREATE_GOAL|QUERY_GOALS|UPDATE_GOAL|DELETE_GOAL|MAKE_CALL|SAVE_CONTACT|CREATE_CLIENT|LOG_INVOICE|SCHEDULE_MEETING|LOG_LEAD|CREATE_PROJECT",
   "confidence": 0.90,
   "activity": "kya karna hai",
   "time": "kab karna hai",
